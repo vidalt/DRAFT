@@ -12,7 +12,7 @@ bagging=False
 for method in["cp-sat", "milp"]:
 
     # Experiment (locate the right folder)
-    folder = "results_%s" %method
+    folder = "results/results_%s" %method
 
     # Combinations of hyperparameters
     val_trees = [1, 5, 10, 20,30,40,50,60,70,80,90,100]

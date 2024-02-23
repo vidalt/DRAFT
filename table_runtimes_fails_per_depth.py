@@ -14,7 +14,7 @@ for dataset in ["compas", "default_credit", "adult"]:
         #        continue
         print("==== EXPERIMENT: " + str(dataset) + " " + str(bagging) + " ====")
         # Experiment (locate the right folder)
-        folder = "results_%s" %method
+        folder = "results/results_%s" %method
 
         # Combinations of hyperparameters
         val_trees = [1, 10, 30, 50, 80,100]

@@ -12,7 +12,7 @@ figures_sizes = (7.0,5.0)
 for mode in ['train', 'test']:
     for dataset in ["adult", "compas", "default_credit"]:
         for bagging in [True, False]:
-            folder = "results_%s" %method
+            folder = "results/results_%s" %method
 
             # Combinations of hyperparameters
             val_trees = [1, 5, 10, 20,30,40,50,60,70,80,90,100]
