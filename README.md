@@ -8,23 +8,23 @@ Our attack is implemented as a Python module contained in the `DRAFT.py` file.
 
 Depending on the particular method used to conduct the dataset reconstruction attack, a third party solver may need to be installed, in particular:
 
-* our **CP based formulations** (with or without the use of bagging to train the target random forest) use the `OR-Tools` `CP-SAT` solver. Setup instructions are available on:
+* our **CP based formulations** (with or without the use of bagging to train the target random forest) use the `OR-Tools` CP-SAT solver. Setup instructions are available on:
     * https://developers.google.com/optimization/install/python
 
-* our **MILP-based formulation** (note that bagging is not supported) uses the `Gurobi` `MILP` solver through its Python wrapper. Note that free academic licenses are available. Setup instructions are available on:
+* our **MILP-based formulation** (note that bagging is not supported) uses the `Gurobi` MILP solver through its Python wrapper. Note that free academic licenses are available. Setup instructions are available on:
     * https://www.gurobi.com/academia/academic-program-and-licenses/
     * https://www.gurobi.com/downloads/end-user-license-agreement-academic/
 
 Other dependencies may be required: 
 
 * Our implementation of the attack evaluation (function `average_error` within the `utils.py` file) requires the use of the `scipy` python module to compute the minimum cost matching between reconstructed and actual training examples. Setup instructions are available on:
-    * https://scipy.org/install/ .
+    * https://scipy.org/install/
 
 * The target models we consider are Random Forests learnt using the `scikit-learn` Python library. Setup instructions are available on:
-    * https://scikit-learn.org/stable/install.html .
+    * https://scikit-learn.org/stable/install.html
 
 * Our scripts commonly use popular libraries such as `numpy`, `pandas`, and `matplotlib`. Setup instructions are available on:
-    * https://numpy.org/install/ .
+    * https://numpy.org/install/
     * https://pandas.pydata.org/docs/getting_started/install.html
     * https://matplotlib.org/stable/users/installing/index.html
 
@@ -46,11 +46,8 @@ X_train, X_test, y_train, y_test = data_splitting(df, "recidivate-within-two-yea
 X_train = X_train.to_numpy() # 40 examples
 
 # Train a Random Forest (without bootstrap sampling)
-clf = RandomForestClassifier(bootstrap = False, random_state = 42)
+clf = RandomForestClassifier(bootstrap = True, random_state = 42, timeout=10) # limit the solver execution to 10 seconds
 clf = clf.fit(X_train, y_train)
-accuracy_train = clf.score(X_train, y_train)
-accuracy_test = clf.score(X_test, y_test)
-print("accuracy_train=", accuracy_train, "accuracy_test=",accuracy_test)
 
 # Reconstruct the Random Forest's training set
 from DRAFT import DRAFT
@@ -70,26 +67,39 @@ print("Reconstruction Error: ", e_mean)
 
 ```
 
+Expected output:
+
+``` bash
+
+Complete solving duration : 11.815798997879028
+Reconstruction Error:  0.0017857142857142857
+
+```
+
 ## Files Description
 
-Hereafter is a precise description of the different files:
+Hereafter is a description of the different files:
 
-* `DRAFT.py` contains the implementation of the main module.
+* `DRAFT.py` contains the implementation of the main module (DRAFT attack).
 
 * `minimal_example.py` provides a minimal example use of our training set reconstruction tools.
 
-* The `data` folder contains the three binary datasets considered in our experiments and `datasets_infos.py` contains information regarding the three datasets used in our experiments (in particular, the list of binary attributes one hot encoding the same original feature)
+* The `data` folder contains the three binary datasets considered in our experiments and `datasets_infos.py` provides information regarding these datasets (in particular, the list of binary attributes one hot encoding the same original feature).
 
-* `utils.py` contains several helper functions used in our experiments, such as `average_error` which computes the average reconstruction error between the proposed reconstruction x_sol and the actual training set x_train_list. Both must have the same shape. As described in our paper, we first perform a minimum cost matching to determine which reconstructed example corresponds to which actual example. We then compute the average error over all attributes of all (matched) examples and return it.
+* `utils.py` contains several helper functions used in our experiments, such as `average_error` which computes the average reconstruction error between the proposed reconstruction `x_sol` and the actual training set `x_train_list`. Both must have the same shape. As described in our paper, we first perform a minimum cost matching to determine which reconstructed example corresponds to which actual example. We then compute the average error over all attributes of all (matched) examples and return it.
 
 ### To launch our experiments
 
-Main experiments file is `data_extraction_from_rf_experiments.py`. Its argument `expe_id` indicates which combination of parameters should be used (namely, dataset, random seed, whether to use bagging or not, maximum depth of the trees and number of trees within the forest) within the precomputed list of all combinations of parameters. The size of the list (number of *parameters combinations*) depends on the used method and is indicated hereafter.
+Main experiments file is `data_extraction_from_rf_experiments.py`. It can be run with:
 
-Key variable that must be set is `method`: 
+ `python3.10 data_extraction_from_rf_experiments.py --expe_id=xx` 
+ 
+ where `xx` indicates which combination of parameters should be used (namely, dataset, random seed, whether to use bagging or not, maximum depth of the trees and number of trees within the forest) within the precomputed list of all combinations of parameters. The size of the list (number of *parameters combinations*) depends on the used method and is indicated hereafter.
 
-* `cp-sat` to use the CP formulations (solved using OR-Tools) *(2160 parameters combinations)*
-* `milp` to use the MILP formulations (solved using Gurobi) (Appendix A) *(1080 parameters combinations)*
+Key variable that must be set in `data_extraction_from_rf_experiments.py` is `method`: 
+
+* `cp-sat` to use the CP formulations with or without bagging (solved using OR-Tools) *(2160 parameters combinations)*
+* `milp` to use the MILP formulation without bagging (solved using Gurobi) (Appendix A) *(1080 parameters combinations)*
 * `bench` corresponds to the additional experiments on the impact of bagging on data privacy (Appendix B) *(1080 parameters combinations)*
 * `bench_partial_{attributes, examples}` corresponds to the complementary experiments on partial reconstruction with knowledge of part of the training set attributes *(185 parameters combinations)* or examples *(210 parameters combinations)*
 
@@ -128,8 +138,7 @@ Results are stored within the `results_{cp-sat, milp, bench, partial_examples, p
 `python3.10 plot_results_target_models_perfs.py`
     * => Generates within the `figures` folder files `{adult, compas, default_credit}_cp-sat_bagging={True, False}_target_models_perfs_{train, test}.pdf`
 
-
-## Details on the Attack Parameters
+## Attack Parameters
 
 Our proposed Dataset Reconstruction Attacks against Tree Ensembles are implemented within the `DRAFT` module, contained in the `DRAFT.py` Python file. The different parameters and methods of this module are detailed hereafter:
 
@@ -220,6 +229,8 @@ Our proposed Dataset Reconstruction Attacks against Tree Ensembles are implement
         * `duration`: duration of the solve (in seconds).
         * `reconstructed_data`: array of shape = [n_samples, n_attributes] encoding the reconstructed dataset.
 
+### Methods implementing the complementary experiments provided in our paper (Appendices B and D)
+
 * **perform_benchmark_partial_examples(self, n_threads=0, time_out=60, verbosity=1, seed=0, X_known = [], y_known=[])** <br>  Runs the complementary experiments on reconstruction with knowledge of part of the training set examples, mentionned in the Appendix D of our paper. The model builds upon the CP based dataset reconstruction model (with the use of bagging to train the target random forest) using the OR-Tools CP-SAT solver, but pre-fixes a number of (supposedly known) training set examples (rows).
 
     * `n_threads`: *int >= 0, optional (default 0).* Maximum number of threads to be used by the solver to parallelize search. If 0, use all available threads.
@@ -262,24 +273,6 @@ Our proposed Dataset Reconstruction Attacks against Tree Ensembles are implement
         * `duration`: duration of the solve (in seconds).
         * `reconstructed_data`: array of shape = [n_samples, n_attributes] encoding the reconstructed dataset.
 
-* **perform_reconstruction_v2_CP_SAT_alt(self, n_threads=0, time_out=60, verbosity=1, seed=0, useprobctr = 0)** <br> Constructs and solves an alternate formulation of our CP based dataset reconstruction model (with the use of bagging to train the target random forest) using the OR-Tools CP-SAT solver. Note that its objective function is NOT the one presented in our paper but rather minimizes the absolute difference to the cumulative distribution of probability that a sample is used at least b times, for every tree.
-
-* `n_threads`: *int >= 0, optional (default 0).* Maximum number of threads to be used by the solver to parallelize search. If 0, use all available threads.
-
-* `time_out`: *int, optional (default 60).* Maximum CPU time (in seconds) to be used by the search. If the solver is not able to return a solution within the given time frame, it will be indicated in the returned dictionary.
-
-* `verbosity`: *int, optional (default 1).* Whether to print information about the search progress (1) or not (0).
-
-* `seed`: *int, optional (default 0).* Random number generator seed used to fix the behaviour of the solver.
-
-* `useprobctr`: *int, optional (default 0).* Whether to use constraints that are not necessarily valid, but valid with high probability (measured by epsilon specified within that function) (1) or not (0).
-
-* **=> returns:** dictionary containing:
-    * `max_max_depth`: maximum depth found when parsing the trees within the forest. 
-    * `status`: the solve status returned by the solver. It can be 'UNKNOWN', 'MODEL_INVALID', 'FEASIBLE', 'INFEASIBLE', or 'OPTIMAL'.
-    * `duration`: duration of the solve (in seconds).
-    * `reconstructed_data`: array of shape = [n_samples, n_attributes] encoding the reconstructed dataset.
-
 * **perform_reconstruction_benchmark(self, x_train, y_train, n_threads=0, time_out=60, verbosity=1, seed=0)** <br> Runs the complementary experiments on the impact of bagging on data protection, mentionned in the Appendix B of our paper. The model builds upon the CP based dataset reconstruction model (with the use of bagging to train the target random forest) using the OR-Tools CP-SAT solver, but first pre-computes the optimal assignments of the examples' occurences within each tree's training set (using the actual forest's training set) before computing how bad the reconstruction could be at worst given these correct occurences assignements.
 
     * `x_train`: *array-like, shape = [n_known, n_features] (default []).* The actual training set of the forest (used only to compute the optimal #occurences of the examples within the trees' training sets) with `n_known = N` and `n_features = M`
@@ -299,3 +292,24 @@ Our proposed Dataset Reconstruction Attacks against Tree Ensembles are implement
         * `status`: the solve status returned by the solver. It can be 'UNKNOWN', 'MODEL_INVALID', 'FEASIBLE', 'INFEASIBLE', or 'OPTIMAL'.
         * `duration`: duration of the solve (in seconds).
         * `reconstructed_data`: array of shape = [n_samples, n_attributes] encoding the reconstructed (worst-case reconstruction) dataset.
+
+### Others
+
+* **perform_reconstruction_v2_CP_SAT_alt(self, n_threads=0, time_out=60, verbosity=1, seed=0, useprobctr = 0)** <br> Constructs and solves an alternate formulation of our CP based dataset reconstruction model (with the use of bagging to train the target random forest) using the OR-Tools CP-SAT solver. Note that its objective function is NOT the one presented in our paper but rather minimizes the absolute difference to the cumulative distribution of probability that a sample is used at least b times, for every tree.
+
+* `n_threads`: *int >= 0, optional (default 0).* Maximum number of threads to be used by the solver to parallelize search. If 0, use all available threads.
+
+* `time_out`: *int, optional (default 60).* Maximum CPU time (in seconds) to be used by the search. If the solver is not able to return a solution within the given time frame, it will be indicated in the returned dictionary.
+
+* `verbosity`: *int, optional (default 1).* Whether to print information about the search progress (1) or not (0).
+
+* `seed`: *int, optional (default 0).* Random number generator seed used to fix the behaviour of the solver.
+
+* `useprobctr`: *int, optional (default 0).* Whether to use constraints that are not necessarily valid, but valid with high probability (measured by epsilon specified within that function) (1) or not (0).
+
+* **=> returns:** dictionary containing:
+    * `max_max_depth`: maximum depth found when parsing the trees within the forest. 
+    * `status`: the solve status returned by the solver. It can be 'UNKNOWN', 'MODEL_INVALID', 'FEASIBLE', 'INFEASIBLE', or 'OPTIMAL'.
+    * `duration`: duration of the solve (in seconds).
+    * `reconstructed_data`: array of shape = [n_samples, n_attributes] encoding the reconstructed dataset.
+
