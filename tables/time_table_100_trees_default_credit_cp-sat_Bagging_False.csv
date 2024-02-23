@@ -1,0 +1,9 @@
+"=== Dataset default_credit, method cp-sat ==="
+Max.depth,Reconstruction Times (s),,
+Max.depth,Avg,Std,Max,#timeouts
+2,35.5,32.0,97.5,0
+3,300.8,270.3,729.1,1
+4,6040.0,6931.0,15767.4,2
+5,1358.5,1457.0,3786.6,0
+10,382.8,430.3,1242.7,0
+None,165.0,26.2,208.5,0

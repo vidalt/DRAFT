@@ -1,0 +1,9 @@
+"=== Dataset default_credit, method cp-sat ==="
+,Reconstruction Times (s),,
+#trees,Avg,Std,Max,#timeouts
+1,0.9,0.1,1.0,0
+10,129.7,165.2,452.5,0
+30,47.7,3.9,53.3,0
+50,66.2,10.2,76.9,0
+80,161.3,97.9,353.2,0
+100,165.0,26.2,208.5,0

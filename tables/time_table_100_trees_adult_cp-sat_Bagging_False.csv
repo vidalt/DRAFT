@@ -1,0 +1,9 @@
+"=== Dataset adult, method cp-sat ==="
+Max.depth,Reconstruction Times (s),,
+Max.depth,Avg,Std,Max,#timeouts
+2,20.2,17.1,54.0,0
+3,81.5,70.5,220.5,0
+4,1943.5,1519.5,4708.2,0
+5,1290.7,1469.5,3725.0,0
+10,346.4,225.7,682.0,0
+None,196.3,68.6,296.1,0

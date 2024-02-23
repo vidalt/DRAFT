@@ -1,0 +1,9 @@
+"=== Dataset compas, method cp-sat ==="
+Max.depth,Reconstruction Times (s),,
+Max.depth,Avg,Std,Max,#timeouts
+2,3646.5,1.8,3648.6,0
+3,3644.0,0.4,3644.5,0
+4,3680.3,10.5,3694.3,0
+5,3713.3,22.1,3733.5,0
+10,8150.5,2728.6,11053.2,0
+None,6721.5,2710.2,11061.9,0

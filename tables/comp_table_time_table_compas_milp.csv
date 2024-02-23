@@ -1,0 +1,9 @@
+"=== Dataset compas, method milp ==="
+Max.depth,Reconstruction Times (s),,,
+Max.depth,Avg,Std,Min,Max
+2,5.4,6.1,0.1,31.2
+3,10.3,21.9,0.2,162.5
+4,24.7,52.6,0.2,302.7
+5,26.4,60.4,0.3,418.6
+10,77.6,312.7,2.6,2471.2
+None,188.3,791.2,3.3,4521.8
