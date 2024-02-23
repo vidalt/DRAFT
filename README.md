@@ -8,7 +8,7 @@ Our attack is implemented as a Python module contained in the `DRAFT.py` file.
 
 Depending on the particular method used to conduct the dataset reconstruction attack, a third party solver may need to be installed, in particular:
 
-* our **CP based formulations** (with or without the use of bagging to train the target random forest) uses the `OR-Tools` `CP-SAT` solver. Setup instructions are available on:
+* our **CP based formulations** (with or without the use of bagging to train the target random forest) use the `OR-Tools` `CP-SAT` solver. Setup instructions are available on:
     * https://developers.google.com/optimization/install/python
 
 * our **MILP-based formulation** (note that bagging is not supported) uses the `Gurobi` `MILP` solver through its Python wrapper. Note that free academic licenses are available. Setup instructions are available on:
