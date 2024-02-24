@@ -49,7 +49,8 @@ class DRAFT:
 
         maxcards: Maximum per-class cardinalities among all trees -> only used for the models with bagging (without bagging, all these cardinalities should be equal accross all trees)
         """
-        import numpy as np 
+        import numpy as np
+        import sklearn
 
         ## Parse the forest
         # Trees of the forest
@@ -106,7 +107,21 @@ class DRAFT:
         for tree in T:
             t = tree.tree_
 
-            cards = list(t.value[0][0])
+            # Depending on sklearn version different parsing must be done here
+            sklearn_version = str(sklearn.__version__).split(".")
+            if int(sklearn_version[0]) <= 1 and int(sklearn_version[1]) <= 3:
+                nodes_value = t.value # For all nodes in the tree, list of their value (support for both classes)
+            else:
+                total_examples = t.n_node_samples
+                nodes_value = t.value # For all nodes in the tree, list of their value (relative support for both classes)
+                for i in range(len(nodes_value)):     # For each node           
+                    #print(total_examples[i], nodes_value[i])
+                    for j in range(len(nodes_value[i][0])):
+                        nodes_value[i][0][j] = np.round(nodes_value[i][0][j] * total_examples[i], decimals=0)
+                    #print(total_examples[i], nodes_value[i], '\n')
+                    assert(sum(nodes_value[i][0]) == total_examples[i]) # just make sure there were no rounding error
+
+            cards = list(nodes_value[0][0]) # at the root
 
             if first_tree: # Init constants (only do it once)
                 # Nombre de classes (lisible par exemple ici en regardant la taille du tableau des cardinalités à la racine de l'arbre 0)
@@ -142,16 +157,16 @@ class DRAFT:
             children_left = t.children_left # For all nodes in the tree, list of their left children (or -1 for leaves)
             children_right = t.children_right # For all nodes in the tree, list of their right children (or -1 for leaves)
             nodes_features = t.feature # For all nodes in the tree, list of their used feature (or -2 for leaves)
-            nodes_value = t.value # For all nodes in the tree, list of their value (support for both classes)
+            
             nodes_features += 1
 
             all_branches = list(retrieve_branches(n_nodes, children_left, children_right, nodes_features, nodes_value))
+            
 
             trees_branches.append(all_branches)
 
         if verbosity:
             print("RF parsing done!")
-
         return T, M, N, C, Z, max_max_depth, trees_branches, maxcards
     
     # MAIN FUNCTIONS
@@ -410,6 +425,7 @@ class DRAFT:
         import numpy as np # useful
         from gurobipy import GRB, quicksum # solver
         import time # time measurements
+        import sklearn 
 
         clf = self.clf
         one_hot_encoded_groups = self.ohe_groups
@@ -502,7 +518,21 @@ class DRAFT:
             V.append([v for v in range(n_nodes)])
             L.append(t.children_left)
             R.append(t.children_right)
-            Nb_c.append(t.value.tolist())
+            # Depending on sklearn version different parsing must be done here
+            sklearn_version = str(sklearn.__version__).split(".")
+            if int(sklearn_version[0]) <= 1 and int(sklearn_version[1]) <= 3:
+                nodes_value = t.value # For all nodes in the tree, list of their value (support for both classes)
+            else:
+                total_examples = t.n_node_samples
+                nodes_value = t.value # For all nodes in the tree, list of their value (relative support for both classes)
+                for i in range(len(nodes_value)):     # For each node           
+                    #print(total_examples[i], nodes_value[i])
+                    for j in range(len(nodes_value[i][0])):
+                        nodes_value[i][0][j] = np.round(nodes_value[i][0][j] * total_examples[i], decimals=0)
+                    #print(total_examples[i], nodes_value[i], '\n')
+                    assert(sum(nodes_value[i][0]) == total_examples[i]) # just make sure there were no rounding error
+
+            Nb_c.append(nodes_value.tolist())
 
         # Nombre de classes (lisible par exemple ici en regardant la taille du tableau des cardinalités à la racine de l'arbre 0)
         C = len(Nb_c[0][0][0])

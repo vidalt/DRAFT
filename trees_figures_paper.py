@@ -21,6 +21,7 @@ for removed_feat in [0,1,2,3]:
     clf.fit(X, y) 
     print("DT accuracy = ", clf.score(X, y))
 
+    import sklearn
     from sklearn.tree import plot_tree
     import matplotlib.pyplot as plt
     import numpy as np
@@ -110,7 +111,20 @@ for removed_feat in [0,1,2,3]:
     children_left = t.children_left # For all nodes in the tree, list of their left children (or -1 for leaves)
     children_right = t.children_right # For all nodes in the tree, list of their right children (or -1 for leaves)
     nodes_features = t.feature # For all nodes in the tree, list of their used feature (or -2 for leaves)
-    nodes_value = t.value # For all nodes in the tree, list of their value (support for both classes)
+    # Depending on sklearn version different parsing must be done here
+    sklearn_version = str(sklearn.__version__).split(".")
+    if int(sklearn_version[0]) <= 1 and int(sklearn_version[1]) <= 3:
+        nodes_value = t.value # For all nodes in the tree, list of their value (support for both classes)
+    else:
+        total_examples = t.n_node_samples
+        nodes_value = t.value # For all nodes in the tree, list of their value (relative support for both classes)
+        for i in range(len(nodes_value)):     # For each node           
+            #print(total_examples[i], nodes_value[i])
+            for j in range(len(nodes_value[i][0])):
+                nodes_value[i][0][j] = np.round(nodes_value[i][0][j] * total_examples[i], decimals=0)
+            #print(total_examples[i], nodes_value[i], '\n')
+            assert(sum(nodes_value[i][0]) == total_examples[i]) # just make sure there were no rounding error
+
     nodes_features += 1
 
     all_branches = list(retrieve_branches(n_nodes, children_left, children_right, nodes_features, nodes_value))

@@ -36,7 +36,7 @@ else:
     n_threads = 8 # -1 = all threads available
     print_logs = 1
     rank = expe_id
-    local_tests = 0
+    local_tests = 1
 
 time_out =  5*60*60
 n_random_sols=100
@@ -117,9 +117,9 @@ if local_tests: # for local runs
     train_size = 10
     n_estimators = 10
     max_depth_t = None
-    bagging = True
+    bagging = False
     dataset = "compas"
-    method = "bench_partial_attributes" 
+    method = "cp-sat" 
     known_proportion = 0.8
     known_attributes_nb = 2
     seed = 0#params_list[rank][2]

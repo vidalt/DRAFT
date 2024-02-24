@@ -43,7 +43,6 @@ from utils import *
 df = pd.read_csv("data/compas.csv")
 df = df.sample(n=50, random_state = 42, ignore_index= True)
 X_train, X_test, y_train, y_test = data_splitting(df, "recidivate-within-two-years:1", test_size=10, seed=42)
-X_train = X_train.to_numpy() # 40 examples
 
 # Train a Random Forest (without bootstrap sampling)
 clf = RandomForestClassifier(bootstrap = True, random_state = 42, timeout=10) # limit the solver execution to 10 seconds
@@ -60,7 +59,7 @@ duration = dict_res['duration']
 x_sol = dict_res['reconstructed_data']
 
 # Evaluate and display the reconstruction rate
-e_mean, list_matching = average_error(x_sol,list(X_train))
+e_mean, list_matching = average_error(x_sol,X_train.to_numpy())
 
 print("Complete solving duration :", duration)
 print("Reconstruction Error: ", e_mean)

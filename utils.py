@@ -32,22 +32,22 @@ def matrice_matching(x_sol,x_train):
             Matrice_match[i][j] = dist_individus(x_sol[i],x_train[j])
     return Matrice_match
 
-def average_error(x_sol,x_train_list):
+def average_error(x_sol,x_train):
     """
-    Computes the average reconstruction error between the proposed reconstruction x_sol and the actual training set x_train_list.
+    Computes the average reconstruction error between the proposed reconstruction x_sol and the actual training set x_train.
     Both must have the same shape.
     As described in our paper, we first perform a minimum cost matching to determine which reconstructed example corresponds to which actual example.
     We then compute the average error over all attributes of all (matched) examples and return it.
     """
     import numpy as np
-    assert(np.asarray(x_sol).shape == np.asarray(x_train_list).shape)
+    assert(np.asarray(x_sol).shape == np.asarray(x_train).shape)
     from scipy.optimize import linear_sum_assignment
-    cost = matrice_matching(x_sol,x_train_list)
+    cost = matrice_matching(x_sol,x_train)
     row_ind, col_ind = linear_sum_assignment(cost)
     moyenne = 0
-    for i in range(len(x_train_list)):
-        moyenne += dist_individus(x_sol[i], x_train_list[col_ind[i]])
-    moyenne = moyenne/len(x_train_list)
+    for i in range(len(x_train)):
+        moyenne += dist_individus(x_sol[i], x_train[col_ind[i]])
+    moyenne = moyenne/len(x_train)
     return moyenne, col_ind.tolist()
 
 def generate_random_sols(N,M, dataset_ohe_groups=[], n_sols=10, seed=42):
