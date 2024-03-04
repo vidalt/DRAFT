@@ -1,0 +1,7 @@
+scipy
+numpy
+scikit-learn
+pandas
+matplotlib
+ortools
+gurobipy
