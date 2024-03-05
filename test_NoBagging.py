@@ -14,9 +14,8 @@ class test_NoBagging(unittest.TestCase):
     df = pd.read_csv(dataset)
 
     # Subsample and divide it
-    df = df.sample(n=40, random_state = 42, ignore_index= True)
-    X_train, X_test, y_train, y_test = data_splitting(df, "recidivate-within-two-years:1", 20, 42)
-    X_train = X_train.to_numpy() # 50 examples
+    df = df.sample(n=50, random_state = 42, ignore_index= True)
+    X_train, X_test, y_train, y_test = data_splitting(df, "recidivate-within-two-years:1", test_size=10, seed=42)
 
     # Train a Random Forest (without bootstrap sampling)
     clf = RandomForestClassifier(bootstrap = False, random_state = 42)
@@ -28,15 +27,19 @@ class test_NoBagging(unittest.TestCase):
     extractor = DRAFT(clf)
 
     def test_CPModel(self):
+        # Perform the reconstruction using the CP formulation
         dict_res = self.extractor.fit(bagging=False, method="cp-sat", timeout=60, verbosity=False, n_jobs=-1, seed=42) # 'status':solve_status, 'duration': duration, 'reconstructed_data':x_sol
         duration = dict_res['duration']
         x_sol = dict_res['reconstructed_data']
-        e_mean, list_matching = ecart_moyen(x_sol,list(self.X_train))
+        # Evaluate and display the reconstruction rate
+        e_mean, list_matching = average_error(x_sol,self.X_train.to_numpy())
         self.assertTrue(e_mean < 0.005) # Expect even less
-    
+
     def test_MILPModel(self):
+        # Perform the reconstruction using the MILP formulation
         dict_res = self.extractor.fit(bagging=False, method="milp", timeout=60, verbosity=False, n_jobs=-1, seed=42) # 'status':solve_status, 'duration': duration, 'reconstructed_data':x_sol
         duration = dict_res['duration']
         x_sol = dict_res['reconstructed_data']
-        e_mean, list_matching = ecart_moyen(x_sol,list(self.X_train))
+        # Evaluate and display the reconstruction rate
+        e_mean, list_matching = average_error(x_sol,self.X_train.to_numpy())
         self.assertTrue(e_mean < 0.005) # Expect even less

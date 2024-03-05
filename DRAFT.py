@@ -51,6 +51,7 @@ class DRAFT:
         """
         import numpy as np
         import sklearn
+        from copy import deepcopy
 
         ## Parse the forest
         # Trees of the forest
@@ -156,7 +157,8 @@ class DRAFT:
             n_nodes = t.node_count
             children_left = t.children_left # For all nodes in the tree, list of their left children (or -1 for leaves)
             children_right = t.children_right # For all nodes in the tree, list of their right children (or -1 for leaves)
-            nodes_features = t.feature # For all nodes in the tree, list of their used feature (or -2 for leaves)
+            nodes_features = deepcopy(t.feature) # For all nodes in the tree, list of their used feature (or -2 for leaves)
+            # Note that we need to make deep copies of the lists for which we modify elements
             
             nodes_features += 1
 
