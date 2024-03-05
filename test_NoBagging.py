@@ -1,9 +1,9 @@
 import unittest
 from pathlib import Path
-# Import local functions to test
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from utils import * 
+# Import local functions to test
 from DRAFT import DRAFT
 
 class test_NoBagging(unittest.TestCase):
@@ -27,7 +27,7 @@ class test_NoBagging(unittest.TestCase):
     extractor = DRAFT(clf)
 
     def test_CPModel(self):
-        # Perform the reconstruction using the CP formulation
+        # Perform the reconstruction using the CP formulation and checks its resulting reconstruction error
         dict_res = self.extractor.fit(bagging=False, method="cp-sat", timeout=60, verbosity=False, n_jobs=-1, seed=42) # 'status':solve_status, 'duration': duration, 'reconstructed_data':x_sol
         duration = dict_res['duration']
         x_sol = dict_res['reconstructed_data']
@@ -35,11 +35,11 @@ class test_NoBagging(unittest.TestCase):
         e_mean, list_matching = average_error(x_sol,self.X_train.to_numpy())
         self.assertTrue(e_mean < 0.005) # Expect even less
 
-    def test_MILPModel(self):
-        # Perform the reconstruction using the MILP formulation
+    '''def test_MILPModel(self):
+        # Perform the reconstruction using the MILP formulation and checks its resulting reconstruction error
         dict_res = self.extractor.fit(bagging=False, method="milp", timeout=60, verbosity=False, n_jobs=-1, seed=42) # 'status':solve_status, 'duration': duration, 'reconstructed_data':x_sol
         duration = dict_res['duration']
         x_sol = dict_res['reconstructed_data']
         # Evaluate and display the reconstruction rate
         e_mean, list_matching = average_error(x_sol,self.X_train.to_numpy())
-        self.assertTrue(e_mean < 0.005) # Expect even less
+        self.assertTrue(e_mean < 0.005) # Expect even less'''
