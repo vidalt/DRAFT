@@ -35,11 +35,16 @@ class test_NoBagging(unittest.TestCase):
         e_mean, list_matching = average_error(x_sol,self.X_train.to_numpy())
         self.assertTrue(e_mean < 0.005) # Expect even less
 
-    '''def test_MILPModel(self):
-        # Perform the reconstruction using the MILP formulation and checks its resulting reconstruction error
-        dict_res = self.extractor.fit(bagging=False, method="milp", timeout=60, verbosity=False, n_jobs=-1, seed=42) # 'status':solve_status, 'duration': duration, 'reconstructed_data':x_sol
-        duration = dict_res['duration']
-        x_sol = dict_res['reconstructed_data']
-        # Evaluate and display the reconstruction rate
-        e_mean, list_matching = average_error(x_sol,self.X_train.to_numpy())
-        self.assertTrue(e_mean < 0.005) # Expect even less'''
+    def test_MILPModel(self):
+        from gurobipy import GurobiError
+        try:
+            # Perform the reconstruction using the MILP formulation and checks its resulting reconstruction error
+            dict_res = self.extractor.fit(bagging=False, method="milp", timeout=60, verbosity=False, n_jobs=-1, seed=42) # 'status':solve_status, 'duration': duration, 'reconstructed_data':x_sol
+            duration = dict_res['duration']
+            x_sol = dict_res['reconstructed_data']
+            # Evaluate and display the reconstruction rate
+            e_mean, list_matching = average_error(x_sol,self.X_train.to_numpy())
+            self.assertTrue(e_mean < 0.005) # Expect even less
+        except GurobiError:
+            print("Warning: Gurobi license not found:"
+                  " cannot run integration test that solves MILP.")

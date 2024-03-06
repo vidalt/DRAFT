@@ -113,7 +113,7 @@ class DRAFT:
             if int(sklearn_version[0]) <= 1 and int(sklearn_version[1]) <= 3:
                 nodes_value = t.value # For all nodes in the tree, list of their value (support for both classes)
             else:
-                total_examples = t.n_node_samples
+                total_examples = t.weighted_n_node_samples
                 nodes_value = t.value # For all nodes in the tree, list of their value (relative support for both classes)
                 for i in range(len(nodes_value)):     # For each node           
                     #print(total_examples[i], nodes_value[i])
@@ -169,6 +169,7 @@ class DRAFT:
 
         if verbosity:
             print("RF parsing done!")
+
         return T, M, N, C, Z, max_max_depth, trees_branches, maxcards
     
     # MAIN FUNCTIONS
@@ -525,7 +526,7 @@ class DRAFT:
             if int(sklearn_version[0]) <= 1 and int(sklearn_version[1]) <= 3:
                 nodes_value = t.value # For all nodes in the tree, list of their value (support for both classes)
             else:
-                total_examples = t.n_node_samples
+                total_examples = t.weighted_n_node_samples
                 nodes_value = t.value # For all nodes in the tree, list of their value (relative support for both classes)
                 for i in range(len(nodes_value)):     # For each node           
                     #print(total_examples[i], nodes_value[i])
