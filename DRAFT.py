@@ -114,7 +114,7 @@ class DRAFT:
                 nodes_value = t.value # For all nodes in the tree, list of their value (support for both classes)
             else:
                 total_examples = t.weighted_n_node_samples
-                nodes_value = t.value # For all nodes in the tree, list of their value (relative support for both classes)
+                nodes_value = deepcopy(t.value) # For all nodes in the tree, list of their value (relative support for both classes)
                 for i in range(len(nodes_value)):     # For each node           
                     #print(total_examples[i], nodes_value[i])
                     for j in range(len(nodes_value[i][0])):
@@ -466,6 +466,7 @@ class DRAFT:
         M = T[0].n_features_in_
         max_max_depth = 0
         # iterate over the trees of the forest
+        from copy import deepcopy
         for tree in T:
             t = tree.tree_
             max_depth = t.max_depth
@@ -527,7 +528,7 @@ class DRAFT:
                 nodes_value = t.value # For all nodes in the tree, list of their value (support for both classes)
             else:
                 total_examples = t.weighted_n_node_samples
-                nodes_value = t.value # For all nodes in the tree, list of their value (relative support for both classes)
+                nodes_value = deepcopy(t.value) # For all nodes in the tree, list of their value (relative support for both classes)
                 for i in range(len(nodes_value)):     # For each node           
                     #print(total_examples[i], nodes_value[i])
                     for j in range(len(nodes_value[i][0])):
