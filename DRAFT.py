@@ -351,7 +351,8 @@ class DRAFT:
                 for c in range(C):
                     model.Add(cp_model.LinearExpr.Sum(branch_vars_c[c]) ==  int(a_branch[1][c])) # enforces the branch per-class cardinality
             for k in range(N):
-                model.Add(cp_model.LinearExpr.Sum(examples_capts[k]) == 1) # each example captured by exactly one branch
+                if len(examples_capts[k]) > 0:
+                    model.Add(cp_model.LinearExpr.Sum(examples_capts[k]) == 1) # each example captured by exactly one branch
 
         # Ordre lexicographique au sein des classes
         '''deb = 0
