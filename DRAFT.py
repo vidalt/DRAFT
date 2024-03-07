@@ -694,6 +694,7 @@ class DRAFT:
             -> 'duration': duration
             -> 'reconstructed_data': array of shape = [n_samples, n_attributes] encoding the reconstructed dataset.
         """
+        import ortools
         from ortools.sat.python import cp_model
         import numpy as np  # useful
         import time  # time measurements
@@ -813,8 +814,11 @@ class DRAFT:
 
             for t in range(ntrees):
                 # Enforces relationship between counting variable eta and binary variables q
-                model.AddMapDomain( eta_vars[k][t], q_vars[k][t], offset=0 )
-
+                ortools_version = str(ortools.__version__).split(".")
+                if int(ortools_version[0]) <= 9 and int(ortools_version[1]) <= 8:
+                    model.AddMapDomain( eta_vars[k][t], q_vars[k][t], offset=0 )
+                else:
+                    model.add_map_domain( eta_vars[k][t], q_vars[k][t], offset=0 )
 
         nleaves = []
         for tid, all_branches_t in enumerate(trees_branches):  # for each tree
@@ -1119,6 +1123,7 @@ class DRAFT:
             -> 'duration': duration
             -> 'reconstructed_data': array of shape = [n_samples, n_attributes] encoding the reconstructed dataset.
         """
+        import ortools
         from ortools.sat.python import cp_model
         import numpy as np  # useful
         import time  # time measurements
@@ -1242,7 +1247,12 @@ class DRAFT:
 
             for t in range(ntrees):
                 # Enforces relationship between counting variable eta and binary variables q
-                model.AddMapDomain( eta_vars[k][t], q_vars[k][t], offset=0 )
+                ortools_version = str(ortools.__version__).split(".")
+                if int(ortools_version[0]) <= 9 and int(ortools_version[1]) <= 8:
+                    model.AddMapDomain( eta_vars[k][t], q_vars[k][t], offset=0 )
+                else:
+                    model.add_map_domain( eta_vars[k][t], q_vars[k][t], offset=0 )
+
 
 
         nleaves = []
@@ -1379,6 +1389,7 @@ class DRAFT:
             -> 'duration': duration
             -> 'reconstructed_data': array of shape = [n_samples, n_attributes] encoding the reconstructed dataset.
         """
+        import ortools
         from ortools.sat.python import cp_model
         import numpy as np  # useful
         import time  # time measurements
@@ -1477,7 +1488,12 @@ class DRAFT:
 
             for t in range(ntrees):
                 # Enforces relationship between counting variable eta and binary variables q
-                model.AddMapDomain( eta_vars[k][t], q_vars[k][t], offset=0 )
+                ortools_version = str(ortools.__version__).split(".")
+                if int(ortools_version[0]) <= 9 and int(ortools_version[1]) <= 8:
+                    model.AddMapDomain( eta_vars[k][t], q_vars[k][t], offset=0 )
+                else:
+                    model.add_map_domain( eta_vars[k][t], q_vars[k][t], offset=0 )
+
 
 
         nleaves = []
@@ -1952,6 +1968,7 @@ class DRAFT:
             -> 'duration': duration
             -> 'reconstructed_data': array of shape = [n_samples, n_attributes] encoding the reconstructed dataset.
         """
+        import ortools
         from ortools.sat.python import cp_model
         import numpy as np  # useful
         import time  # time measurements
@@ -2046,7 +2063,12 @@ class DRAFT:
 
             for t in range(ntrees):
                 # Enforces relationship between counting variable eta and binary variables q
-                model.AddMapDomain( eta_vars[k][t], q_vars[k][t], offset=0 )
+                ortools_version = str(ortools.__version__).split(".")
+                if int(ortools_version[0]) <= 9 and int(ortools_version[1]) <= 8:
+                    model.AddMapDomain( eta_vars[k][t], q_vars[k][t], offset=0 )
+                else:
+                    model.add_map_domain( eta_vars[k][t], q_vars[k][t], offset=0 )
+
 
 
         nleaves = []
