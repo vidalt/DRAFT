@@ -39,20 +39,20 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from utils import * 
 
-# Load data and subsample a toy training dataset with 40 examples
+# Load data and subsample a toy training dataset with 10 examples
 df = pd.read_csv("data/compas.csv")
-df = df.sample(n=50, random_state = 42, ignore_index= True)
-X_train, X_test, y_train, y_test = data_splitting(df, "recidivate-within-two-years:1", test_size=10, seed=42)
+df = df.sample(n=50, random_state = 0, ignore_index= True)
+X_train, X_test, y_train, y_test = data_splitting(df, "recidivate-within-two-years:1", test_size=40, seed=42)
 
 # Train a Random Forest (without bootstrap sampling)
-clf = RandomForestClassifier(bootstrap = True, random_state = 42, timeout=10) # limit the solver execution to 10 seconds
+clf = RandomForestClassifier(bootstrap = False, random_state = 0)
 clf = clf.fit(X_train, y_train)
 
 # Reconstruct the Random Forest's training set
 from DRAFT import DRAFT
 
 extractor = DRAFT(clf)
-dict_res = extractor.fit(bagging=bootstrap_sampling, method="cp-sat", timeout=60, verbosity=False, n_jobs=-1, seed=42) 
+dict_res = extractor.fit(bagging=False, method="cp-sat", timeout=60, verbosity=False, n_jobs=-1, seed=42) 
 
 # Retrieve solving time and reconstructed data
 duration = dict_res['duration']
@@ -70,8 +70,8 @@ Expected output:
 
 ``` bash
 
-Complete solving duration : 11.815798997879028
-Reconstruction Error:  0.0017857142857142857
+Complete solving duration : 0.348616361618042
+Reconstruction Error:  0.0
 
 ```
 
@@ -291,24 +291,4 @@ Our proposed Dataset Reconstruction Attacks against Tree Ensembles are implement
         * `status`: the solve status returned by the solver. It can be 'UNKNOWN', 'MODEL_INVALID', 'FEASIBLE', 'INFEASIBLE', or 'OPTIMAL'.
         * `duration`: duration of the solve (in seconds).
         * `reconstructed_data`: array of shape = [n_samples, n_attributes] encoding the reconstructed (worst-case reconstruction) dataset.
-
-### Others
-
-* **perform_reconstruction_v2_CP_SAT_alt(self, n_threads=0, time_out=60, verbosity=1, seed=0, useprobctr = 0)** <br> Constructs and solves an alternate formulation of our CP based dataset reconstruction model (with the use of bagging to train the target random forest) using the OR-Tools CP-SAT solver. Note that its objective function is NOT the one presented in our paper but rather minimizes the absolute difference to the cumulative distribution of probability that a sample is used at least b times, for every tree.
-
-* `n_threads`: *int >= 0, optional (default 0).* Maximum number of threads to be used by the solver to parallelize search. If 0, use all available threads.
-
-* `time_out`: *int, optional (default 60).* Maximum CPU time (in seconds) to be used by the search. If the solver is not able to return a solution within the given time frame, it will be indicated in the returned dictionary.
-
-* `verbosity`: *int, optional (default 1).* Whether to print information about the search progress (1) or not (0).
-
-* `seed`: *int, optional (default 0).* Random number generator seed used to fix the behaviour of the solver.
-
-* `useprobctr`: *int, optional (default 0).* Whether to use constraints that are not necessarily valid, but valid with high probability (measured by epsilon specified within that function) (1) or not (0).
-
-* **=> returns:** dictionary containing:
-    * `max_max_depth`: maximum depth found when parsing the trees within the forest. 
-    * `status`: the solve status returned by the solver. It can be 'UNKNOWN', 'MODEL_INVALID', 'FEASIBLE', 'INFEASIBLE', or 'OPTIMAL'.
-    * `duration`: duration of the solve (in seconds).
-    * `reconstructed_data`: array of shape = [n_samples, n_attributes] encoding the reconstructed dataset.
 

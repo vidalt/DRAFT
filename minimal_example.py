@@ -1,26 +1,24 @@
+# Load packages
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from utils import * 
 
-bootstrap_sampling = False
-# Load data and subsample a training dataset with 40 examples
+# Load data and subsample a toy training dataset with 10 examples
 df = pd.read_csv("data/compas.csv")
-df = df.sample(n=50, random_state = 42, ignore_index= True)
-X_train, X_test, y_train, y_test = data_splitting(df, "recidivate-within-two-years:1", test_size=10, seed=42)
+df = df.sample(n=50, random_state = 0, ignore_index= True)
+X_train, X_test, y_train, y_test = data_splitting(df, "recidivate-within-two-years:1", test_size=40, seed=42)
 
 # Train a Random Forest (without bootstrap sampling)
-clf = RandomForestClassifier(bootstrap = bootstrap_sampling, random_state = 42)
+clf = RandomForestClassifier(bootstrap = False, random_state = 0)
 clf = clf.fit(X_train, y_train)
-accuracy_train = clf.score(X_train, y_train)
-accuracy_test = clf.score(X_test, y_test)
-print("accuracy_train=", accuracy_train, "accuracy_test=",accuracy_test)
 
 # Reconstruct the Random Forest's training set
 from DRAFT import DRAFT
 
 extractor = DRAFT(clf)
-dict_res = extractor.fit(bagging=bootstrap_sampling, method="cp-sat", timeout=60, verbosity=False, n_jobs=-1, seed=42) # 'status':solve_status, 'duration': duration, 'reconstructed_data':x_sol
+dict_res = extractor.fit(bagging=False, method="cp-sat", timeout=60, verbosity=False, n_jobs=-1, seed=42) 
 
+# Retrieve solving time and reconstructed data
 duration = dict_res['duration']
 x_sol = dict_res['reconstructed_data']
 

@@ -59,9 +59,8 @@ class DRAFT:
 
         # Nombre de features du jeu de données étudiées
         M = T[0].n_features_in_
-
         
-        def retrieve_branches(number_nodes, children_left_list, children_right_list, nodes_features_list, nodes_value_list):
+        def retrieve_branches(number_nodes, children_left_list, children_right_list, nodes_features_list, nodes_value_list, nodes_thresholds ):
             """Retrieve decision tree branches"""
 
             # Calculate if a node is a leaf
@@ -82,28 +81,28 @@ class DRAFT:
                         yield (output, list(nodes_value_list[i][0]))
 
                 else:
-
                     # Origin and end nodes
                     origin, end_l, end_r = i, children_left_list[i], children_right_list[i]
 
                     # Iterate over previous paths to add nodes
                     for index, path in enumerate(paths):
                         if origin == path[-1]:
-                            path[-1] = -nodes_features_list[origin]
+                            path[-1] = [-nodes_features_list[origin], nodes_thresholds[origin]] 
                             paths[index] = path + [end_l]
-                            path[-1] = nodes_features_list[origin]
+                            path[-1] = [nodes_features_list[origin], nodes_thresholds[origin]] 
                             paths.append(path + [end_r])
 
                     # Initialize path in first iteration
                     if i == 0:
-                        paths.append([-nodes_features_list[i], children_left[i]])
-                        paths.append([nodes_features_list[i], children_right[i]])
+                        paths.append([[-nodes_features_list[i], nodes_thresholds[i]], children_left[i] ])
+                        paths.append([[nodes_features_list[i], nodes_thresholds[i]], children_right[i] ])
 
         max_max_depth = 0
 
         trees_branches = []
         first_tree = True
         maxcards = []
+
         # iterate over the trees of the forest
         for tree in T:
             t = tree.tree_
@@ -141,13 +140,12 @@ class DRAFT:
                         Z[i, c] = 1
                     deb += int(cards[c])
                 maxcards = [ 0 for c in range(C) ]
+
                 first_tree = False
 
             for c in range(C):
                 if cards[c] > maxcards[c]:
                     maxcards[c] = cards[c]
-            '''print(" Cards = " + str( cards ) )
-            print(" maxcards = " + str( maxcards) )'''
 
             max_depth = t.max_depth
 
@@ -159,11 +157,12 @@ class DRAFT:
             children_right = t.children_right # For all nodes in the tree, list of their right children (or -1 for leaves)
             nodes_features = deepcopy(t.feature) # For all nodes in the tree, list of their used feature (or -2 for leaves)
             # Note that we need to make deep copies of the lists for which we modify elements
-            
+
+            # Not sure we need deepcopy of threshold, but doing it to be safe
+            nodes_thresholds = deepcopy( t.threshold )
             nodes_features += 1
 
-            all_branches = list(retrieve_branches(n_nodes, children_left, children_right, nodes_features, nodes_value))
-            
+            all_branches = list(retrieve_branches(n_nodes, children_left, children_right, nodes_features, nodes_value, nodes_thresholds ))
 
             trees_branches.append(all_branches)
 
@@ -339,15 +338,15 @@ class DRAFT:
                             local_capt_var = model.NewBoolVar('branch_capt_%d_%d_%d' %(c,a_branch_nb,k))
                             branch_vars_c[c].append(local_capt_var)
                             examples_capts[k].append(local_capt_var)
-                            literals = []
                             for a_split in a_branch[0]:
-                                if a_split > 0:
-                                    literals.append(x_vars[k][abs(a_split)-1])
-                                elif a_split < 0:
-                                    literals.append(x_vars[k][abs(a_split)-1].Not())
+                                feature_val = a_split[0]
+                                threshold_val = a_split[1]
+                                if feature_val > 0:
+                                    model.Add( x_vars[k][abs(feature_val)-1] >= int( math.floor( threshold_val ) ) + 1 ).OnlyEnforceIf( local_capt_var )
+                                elif feature_val < 0:
+                                    model.Add(x_vars[k][abs(feature_val) - 1] <= int( math.floor( threshold_val ) ) ).OnlyEnforceIf( local_capt_var)
                                 else:
                                     raise ValueError("Feat 0 shouldn't be used here (1-indexed now)")
-                            model.AddBoolAnd(literals).OnlyEnforceIf(local_capt_var)
                 for c in range(C):
                     model.Add(cp_model.LinearExpr.Sum(branch_vars_c[c]) ==  int(a_branch[1][c])) # enforces the branch per-class cardinality
             for k in range(N):
@@ -835,18 +834,18 @@ class DRAFT:
                 for k in range(N):
                     w_vars[k][tid].append( model.NewBoolVar('w_%d_%d_%d'%(k,tid,a_branch_nb)) )
 
-                    # literals is used to construct the constraint that if k is used in a given tree at a given leaf/branch
-                    # Then the x's must respect the corresponding branch
-                    literals = []
+                    # The loop right after is used to construct the constraints that if k is used in a given tree at a given leaf/branch
+                    # Then the x's must respect all the splits within the corresponding branch
                     for a_split in a_branch[0]:
-                        if a_split > 0:
-                            literals.append(x_vars[k][abs(a_split) - 1])
-                        elif a_split < 0:
-                            literals.append(x_vars[k][abs(a_split) - 1].Not())
+                        feature_val = a_split[0]
+                        threshold_val = a_split[1]
+                        # Constraints that enforce consistency between w and x variables
+                        if feature_val > 0:
+                            model.Add( x_vars[k][abs(feature_val)-1] >= int( math.floor( threshold_val ) ) + 1 ).OnlyEnforceIf( w_vars[k][tid][a_branch_nb] )
+                        elif feature_val < 0:
+                            model.Add(x_vars[k][abs(feature_val) - 1] <= int( math.floor( threshold_val ) ) ).OnlyEnforceIf( w_vars[k][tid][a_branch_nb])
                         else:
                             raise ValueError("Feat 0 shouldn't be used here (1-indexed now)")
-                    # Constraint that enforce consistency between w and x variables
-                    model.AddBoolAnd(literals).OnlyEnforceIf(w_vars[k][tid][a_branch_nb])
 
                     for c in range(C):
                         # Variable y represents how many times sample k is used in tree tid, node a_branch_nb,
@@ -964,7 +963,8 @@ class DRAFT:
             duration = end - start
             dur_runs[r] = duration
 
-            print(" --- RUN %d ---  %g seconds" % (r,duration) )
+            if verbosity:
+                print(" --- RUN %d ---  %g seconds" % (r,duration) )
 
             # Récupération statut/valeurs
             if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
@@ -973,12 +973,14 @@ class DRAFT:
                 obj_val = solver.ObjectiveValue()
                 if use_mleobj:
                     if obj_val > best_obj:
-                        print(" Found new best solution, with value " + str(obj_val) + "  at run " + str(r))
+                        if verbosity:
+                            print(" Found new best solution, with value " + str(obj_val) + "  at run " + str(r))
                         best_obj = obj_val
                         best_x = x_sol.copy()
                 else:
                     if obj_val < best_obj:
-                        print(" Found new best solution, with value " + str(obj_val) + "  at run " + str(r) )
+                        if verbosity:
+                            print(" Found new best solution, with value " + str(obj_val) + "  at run " + str(r) )
                         best_obj = obj_val
                         best_x = x_sol.copy()
 
@@ -1067,12 +1069,12 @@ class DRAFT:
 
         x_sol = best_x
         duration = sum( dur_runs )
-
-        print("*************************************************************")
-        print("*************************************************************")
-        print("  Solver specific:  Objval = %d,  duration = %g " % (best_obj, duration))
-        print("*************************************************************")
-        print("*************************************************************")
+        if verbosity:
+            print("*************************************************************")
+            print("*************************************************************")
+            print("  Solver specific:  Objval = %d,  duration = %g " % (best_obj, duration))
+            print("*************************************************************")
+            print("*************************************************************")
 
         solve_status = {0: 'UNKNOWN',
                         1: 'MODEL_INVALID',
@@ -1270,18 +1272,17 @@ class DRAFT:
                 for k in range(N):
                     w_vars[k][tid].append( model.NewBoolVar('w_%d_%d_%d'%(k,tid,a_branch_nb)) )
 
-                    # literals is used to construct the constraint that if k is used in a given tree at a given leaf/branch
-                    # Then the x's must respect the corresponding branch
-                    literals = []
+                    # The loop right after is used to construct the constraints that if k is used in a given tree at a given leaf/branch
+                    # Then the x's must respect all the splits within the corresponding branch
                     for a_split in a_branch[0]:
-                        if a_split > 0:
-                            literals.append(x_vars[k][abs(a_split) - 1])
-                        elif a_split < 0:
-                            literals.append(x_vars[k][abs(a_split) - 1].Not())
+                        feature_val = a_split[0]
+                        threshold_val = a_split[1]
+                        if feature_val > 0:
+                            model.Add( x_vars[k][abs(feature_val)-1] >= int( math.floor( threshold_val ) ) + 1 ).OnlyEnforceIf( w_vars[k][tid][a_branch_nb] )
+                        elif feature_val < 0:
+                            model.Add(x_vars[k][abs(feature_val) - 1] <= int( math.floor( threshold_val ) ) ).OnlyEnforceIf( w_vars[k][tid][a_branch_nb])
                         else:
                             raise ValueError("Feat 0 shouldn't be used here (1-indexed now)")
-                    # Constraint that enforce consistency between w and x variables
-                    model.AddBoolAnd(literals).OnlyEnforceIf(w_vars[k][tid][a_branch_nb])
 
                     for c in range(C):
                         # Variable y represents how many times sample k is used in tree tid, node a_branch_nb,
@@ -1511,18 +1512,17 @@ class DRAFT:
                 for k in range(N):
                     w_vars[k][tid].append( model.NewBoolVar('w_%d_%d_%d'%(k,tid,a_branch_nb)) )
 
-                    # literals is used to construct the constraint that if k is used in a given tree at a given leaf/branch
-                    # Then the x's must respect the corresponding branch
-                    literals = []
+                    # The loop right after is used to construct the constraints that if k is used in a given tree at a given leaf/branch
+                    # Then the x's must respect all the splits within the corresponding branch
                     for a_split in a_branch[0]:
-                        if a_split > 0:
-                            literals.append(x_vars[k][abs(a_split) - 1])
-                        elif a_split < 0:
-                            literals.append(x_vars[k][abs(a_split) - 1].Not())
+                        feature_val = a_split[0]
+                        threshold_val = a_split[1]
+                        if feature_val > 0:
+                            model.Add( x_vars[k][abs(feature_val)-1] >= int( math.floor( threshold_val ) ) + 1 ).OnlyEnforceIf( w_vars[k][tid][a_branch_nb] )
+                        elif feature_val < 0:
+                            model.Add(x_vars[k][abs(feature_val) - 1] <= int( math.floor( threshold_val ) ) ).OnlyEnforceIf( w_vars[k][tid][a_branch_nb])
                         else:
                             raise ValueError("Feat 0 shouldn't be used here (1-indexed now)")
-                    # Constraint that enforce consistency between w and x variables
-                    model.AddBoolAnd(literals).OnlyEnforceIf(w_vars[k][tid][a_branch_nb])
 
                     for c in range(C):
                         # Variable y represents how many times sample k is used in tree tid, node a_branch_nb,
@@ -1587,339 +1587,6 @@ class DRAFT:
                             'reconstructed_data': x_sol}
         
         return self.result_dict
-    
-    def perform_reconstruction_v2_CP_SAT_alt(self, n_threads=0, time_out=60, verbosity=1, seed=0, useprobctr = 0):
-        """
-        Constructs and solves an alternate formulation of our CP based dataset reconstruction model (with the use of bagging to train the target random forest) using the OR-Tools CP-SAT solver.
-        Note that its objective function is NOT the one presented in our paper 
-        but rather minimizes the absolute difference to the cumulative distribution of
-        probability that a sample is used at least b times, for every tree.
-
-        Arguments
-        ---------
-        n_threads: int >= 0, optional (default 0)
-                        maximum number of threads to be used by the solver to parallelize search
-                        if 0, use all available threads
-
-        time_out: int, optional (default 60)
-                        maximum cpu time (in seconds) to be used by the search
-                        if the solver is not able to return a solution within the given time frame, it will be indicated in the returned dictionary
-
-        verbosity: int, optional (default 1)
-                        whether to print information (1) about the search progress or not (0)
-
-        seed: int, optional (default 0)
-                       random number generator seed
-                       used to fix the behaviour of the solvers
-
-        (it is not recommended to play with the argument below)
-
-        useprobctr: int, optional (default 0)
-                       Whether to use constraints that are not necessarily valid, but valid with high probability (measured by epsilon specified within that function) (1) or not (0).
-        Returns
-        -------
-        output: dictionary containing:
-            -> 'max_max_depth': maximum depth found when parsing the trees within the forest. 
-            -> 'status': the solve status returned by the solver. It can be 'UNKNOWN', 'MODEL_INVALID', 'FEASIBLE', 'INFEASIBLE', or 'OPTIMAL'.
-            -> 'duration': duration
-            -> 'reconstructed_data': array of shape = [n_samples, n_attributes] encoding the reconstructed dataset.
-        """
-        from ortools.sat.python import cp_model
-        import numpy as np  # useful
-        import time  # time measurements
-
-
-        # This is the maximum number of times a sample can appear in a tree (note it will go from 0 to maxbval-1)
-        maxbval = 8
-
-        clf = self.clf
-        one_hot_encoded_groups = self.ohe_groups
-
-        start = time.time()
-
-        ### Create the CP model
-
-        ## Parse the forest
-        T, M, N, C, Z, max_max_depth, trees_branches, maxcards = self.parse_forest(clf, verbosity=verbosity)
-
-        # Defines the probabilities that an item will appear b times
-        P = []
-        Pexact = [0 for i in range(maxbval)]
-        for i in range(maxbval):
-            #P.append( 1 - self.proba_inf(i + 1, N) )
-            P.append(1 - self.proba_inf(i , N))
-        for i in range(maxbval):
-            if i < maxbval - 1:
-                Pexact[i] = P[i] - P[i+1]
-            else:
-                Pexact[i] = P[i]
-
-
-
-        if verbosity:
-            print("Probabilities of an item appearing at least b times:")
-            print(P)
-            print(sum(P))
-
-            print("Probabilities of an item appearing at EXACTLY b times:")
-            print(Pexact)
-            print(sum(Pexact))
-
-        ntrees = len( trees_branches )
-
-        ## Variables
-        model = cp_model.CpModel()
-
-        # x[k][i] : Variables that represent what is sample k (each of its features i)
-        x_vars = [[model.NewBoolVar('x_%d_%d' % (k, i)) for i in range(M)] for k in range(N)]  # table of x_{ki}
-
-        # y_vars[k][c][t][v]: Variables that represent the number of times sample k is used as class c
-        #   in leaf/branch v of tree t
-        y_vars = [[[[] for t in range(ntrees)] for c in range(C)] for k in range(N)]
-
-        # z_vars[k][c]: Variables that represent if sample k is assigned class c
-        z_vars = [[model.NewBoolVar('z_%d_%d'%(k,c)) for c in range(C) ] for k in range(N) ]
-
-        fixedzidx = 0
-        for c in range(C):
-            mincz = math.floor( maxcards[c] / maxbval)
-            for offset in range(mincz):
-                model.Add( z_vars[fixedzidx+offset][c] == 1)
-            fixedzidx += mincz
-
-        # q_vars[t][v][c][b] Variables that represent how many samples are used b times in node v of tree t as class c
-        q_vars = [[] for t in range(ntrees) ]
-
-        # obj_vars[t][b]: Variables that will capture the difference between sum_{k} q_{tkb}  - N * p_b, for fixed t and b
-        obj_vars = [ [ model.NewIntVar(-N,N, 'obj_%d_%d' % (t,b) ) for b in range(maxbval) ] for t in range(ntrees) ]
-
-        # abs_obj_vars[t][b]: Variables that will capture the absolute value of obj_vars for fixed t and b
-        abs_obj_vars = [ [ model.NewIntVar(0,N, 'absobj_%d_%d' % (t,b) ) for b in range(maxbval) ] for t in range(ntrees) ]
-
-
-
-        # Contraints
-        # one-hot encoding
-        for k in range(N):
-            for w in range(
-                    len(one_hot_encoded_groups)):  # for each group of binary attributes one-hot encoding the same attribute
-                model.Add(cp_model.LinearExpr.Sum([x_vars[k][i] for i in one_hot_encoded_groups[w]]) == 1)
-
-            # Enforces that every sample must be in at most one class
-            model.Add( cp_model.LinearExpr.Sum( z_vars[k] ) == 1)
-
-        nleaves = []
-        for tid, all_branches_t in enumerate(trees_branches):  # for each tree
-            nleaves.append( len(all_branches_t) )
-            for a_branch_nb, a_branch in enumerate(all_branches_t):  # iterate over its branches
-
-                # Variables that will be involved in making sure number of samples in each leaf/branch is consistent
-                branch_vars_c = [[] for c in range(C)]
-                coeff_branch_vars_c = [[] for c in range(C) ]
-
-                q_vars[tid].append( [[] for c in range(C) ] )
-                for c in range(C):
-                    for b in range(maxbval):
-                        q_vars[tid][a_branch_nb][c].append( model.NewIntVar(0, N, 'q_%d_%d_%d_%d' % (tid, a_branch_nb, c, b)))
-
-                        branch_vars_c[c].append( q_vars[tid][a_branch_nb][c][b] )
-                        coeff_branch_vars_c[c].append( b )
-
-
-                for k in range(N):
-                    # literals is used to construct the constraint that if k is used in a given tree at a given leaf/branch
-                    # Then the x's must respect the corresponding branch
-                    literals = []
-                    for a_split in a_branch[0]:
-                        if a_split > 0:
-                            literals.append(x_vars[k][abs(a_split) - 1])
-                        elif a_split < 0:
-                            literals.append(x_vars[k][abs(a_split) - 1].Not())
-                        else:
-                            raise ValueError("Feat 0 shouldn't be used here (1-indexed now)")
-
-                    for c in range(C):
-                        # Variable y represents how many times sample k is used in tree tid, node a_branch_nb,
-                        #    being that k is classified as class c
-                        y_vars[k][c][tid].append( model.NewBoolVar('y_%d_%d_%d_%d' % (tid, a_branch_nb, k, c)) )
-
-                        # Constraint that enforce consistency between w and x variables
-                        model.AddBoolAnd(literals).OnlyEnforceIf(y_vars[k][c][tid][a_branch_nb])
-
-
-                        # Constraints that enforce consistency between y and z variables
-                        model.Add( y_vars[k][c][tid][a_branch_nb] == 0 ).OnlyEnforceIf( z_vars[k][c].Not() )
-
-
-                for c in range(C):
-                    model.Add(cp_model.LinearExpr.WeightedSum(branch_vars_c[c], coeff_branch_vars_c[c] ) == int(
-                        a_branch[1][c]))  # enforces the branch per-class cardinality
-
-                    # If samples are being used multiple times, there must be at least enough samples being used at least once
-                    model.Add( cp_model.LinearExpr.Sum( [q_vars[tid][a_branch_nb][c][b] for b in range(maxbval) ]  ) <= cp_model.LinearExpr.Sum( [y_vars[k][c][tid][a_branch_nb] for k in range(N)] ) )
-
-            ## ADDS probabilistic constraints, i.e. constraints that are not necessarily valid, but hold with high probability
-            ## High here means <= eps
-            if useprobctr:
-                eps = 0.005
-                for b in range(2,maxbval):
-                    # prob gets probability that a sample appears at least b times
-                    prob = P[b]
-                    cnt = 0
-                    while prob > eps:
-                        prob = prob*P[b]
-                        cnt += 1
-                    # This means that with prob >= 1-eps, cannot have more than cnt many q's having value at least b
-                    print("Probabilistic constraint: At most %d samples appear %d or more times in a tree ( probability of this being true is %g) " %(cnt,b,1.0-prob) )
-                    model.Add( cp_model.LinearExpr.Sum( [ q_vars[tid][v][c][bp] for v in range(nleaves[tid]) for c in range(C) for bp in range(b,maxbval) ] ) <= cnt )
-
-
-        objfun = []
-        for t in range(ntrees):
-            for b in range(maxbval):
-                # Set obj value abs constraints
-                model.AddAbsEquality( abs_obj_vars[t][b], obj_vars[t][b] )
-
-                #Set relationship between obj_vars and q_vars
-                model.Add( cp_model.LinearExpr.Sum( [q_vars[t][v][c][bp] for v in range(nleaves[t]) for c in range(C) for bp in range(b,maxbval) ] ) - int( N * P[b] ) == obj_vars[t][b] )
-
-                objfun.append( abs_obj_vars[t][b] )
-
-        model.Minimize( cp_model.LinearExpr.Sum(objfun) )
-
-
-        if verbosity:
-            print("Model creation done!")
-
-        # Résolution
-        solver = cp_model.CpSolver()
-
-        # Sets a time limit of XX seconds.
-        solver.parameters.log_search_progress = verbosity
-        solver.parameters.max_time_in_seconds = time_out
-        solver.parameters.num_workers = n_threads
-        solver.parameters.random_seed = seed
-
-        status = solver.Solve(model)
-
-        end = time.time()
-        duration = end - start
-
-        # Récupération statut/valeurs
-        if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
-            x_sol = [[solver.Value(x_vars[k][i]) for i in range(M)] for k in range(N)]
-
-            obj_val = solver.ObjectiveValue()
-
-            # GET and print solution (For debugging mostly)
-            debug = 1
-            if debug :
-                y_sol = [[[[] for t in range(ntrees)] for c in range(C) ] for k in range(N) ]
-
-                y_sample_cnt = [[[] for t in range(ntrees)] for c in range(C) ]
-
-                # z_vars[k][c]: Variables that represent if sample k is assigned class c
-                z_sol = [[solver.Value(z_vars[k][c]) for c in range(C)] for k in range(N)]
-
-                # q_vars[t][v][c][b] Variables that represent how many samples are used b times in node v of tree t as class c
-                q_sol = [[] for t in range(ntrees) ]
-
-                count_samples_fromy = [ 0 for t in range(ntrees) ]
-                count_bvals = [ [ 0 for b in range(maxbval)] for t in range(ntrees) ]
-
-                for t in range(ntrees):
-                    for v in range( len(q_vars[t]) ):
-                        q_sol[t].append( [ [solver.Value(q_vars[t][v][c][b]) for b in range(maxbval) ] for c in range(C) ] )
-
-                for t in range(ntrees):
-                    for c in range(C):
-                        for v in range(len(y_vars[k][c][t])):
-                            y_sample_cnt[c][t].append(0)
-
-
-                for k in range(N):
-                    for t in range(ntrees):
-                        for c in range(C):
-                            y_sol[k][c][t] = [ solver.Value(y_vars[k][c][t][v]) for v in range(len(y_vars[k][c][t]))  ]
-
-                            for v in range(len(y_vars[k][c][t])):
-                                if y_sol[k][c][t][v] > 0 :
-                                    y_sample_cnt[c][t][v] += 1
-
-                # y_sample_cnt will be used to make sure q's are ok
-                for t in range(ntrees):
-                    for v in range(len(q_vars[t])):
-                        for c in range(C):
-                            for b in range(maxbval):
-                                if q_sol[t][v][c][b] > 0:
-                                    assert( y_sample_cnt[c][t][v] >= q_sol[t][v][c][b] )
-                                    y_sample_cnt[c][t][v] -= q_sol[t][v][c][b]
-                                    count_bvals[t][b] += q_sol[t][v][c][b]
-
-
-
-
-                for k in range(N):
-                    print("SOL: SAMPLE %d  :  "%(k)  + str( x_sol[k] ) )
-                    kc = -1
-                    for c in range(C):
-                        if z_sol[k][c] == 1:
-                            # Check that class has not changed
-                            assert( kc == -1 )
-                            kc = c
-                            print("   - assigned class %d" %(c))
-
-                    # Check that it has been assigned some class c
-                    assert( kc != -1 )
-
-                    for t in range(ntrees):
-                        for v in range(len(y_sol[k][kc][t])):
-                            if y_sol[k][kc][t][v] > 0:
-                                count_samples_fromy[t] += y_sol[k][kc][t][v]
-                                print("   -  at node %d of tree %d: %d times"%(v,t,y_sol[k][kc][t][v]))
-
-                ## Tree view
-                print('------ Tree view -------')
-                for t in range(ntrees):
-                    for v in range(nleaves[t]):
-                        print( '  Samples at node %d of tree %d'%(v,t) )
-                        for c in range(C):
-                            for k in range(N):
-                                if y_sol[k][c][t][v] > 0:
-                                    print("     Sample %d of class %d"%(k,c))
-                            for b in range(maxbval):
-                                if q_sol[t][v][c][b] > 0:
-                                    print("     Total %d samples appear %d times of class %d"%(q_sol[t][v][c][b],b,c))
-
-
-
-                print( count_samples_fromy )
-
-                for t in range(ntrees):
-                    print("Distribution of samples for tree %d is:" % t + str( [ count_bvals[t][b] / N for b in range(maxbval) ]))
-                    print(" Expected (values of exact p) were:" + str(Pexact))
-        else:
-            if status == cp_model.INFEASIBLE or status == cp_model.MODEL_INVALID:
-                raise RuntimeError(
-                    'Infeasible model: the reconstruction problem has no solution. Please make sure the provided one-hot encoding constraints are correct. Else, report this issue to the developers.')
-            else:
-                x_sol = np.random.randint(2, size=(N, M))
-
-
-        print("*************************************************************")
-        print("*************************************************************")
-        print("  Solver specific:  Objval = %d,  duration = %g " % (obj_val, duration))
-        print("*************************************************************")
-        print("*************************************************************")
-
-        solve_status = {0: 'UNKNOWN',
-                        1: 'MODEL_INVALID',
-                        2: 'FEASIBLE',
-                        3: 'INFEASIBLE',
-                        4: 'OPTIMAL'}[status]
-
-        self.result_dict = {'max_max_depth': max_max_depth, 'status': solve_status, 'duration': duration,
-                            'reconstructed_data': x_sol}
 
     # Function created to try and figure out what is the best performance that can be expected
     # For this, we assume that one knows ALL samples in advance
@@ -2028,10 +1695,6 @@ class DRAFT:
         # z_vars[k][c]: Variables that represent if sample k is assigned class c
         z_vars = [[model.NewBoolVar('z_%d_%d'%(k,c)) for c in range(C) ] for k in range(N) ]
 
-
-
-
-
         # eta_vars[k][t]: Variables that count how many times sample k is used in tree t
         eta_vars = [[ model.NewIntVar(0,maxbval, 'eta_%d_%d'%(k,t)) for t in range(ntrees)] for k in range(N) ]
 
@@ -2101,19 +1764,17 @@ class DRAFT:
                 for k in range(N):
                     w_vars[k][tid].append( model.NewBoolVar('w_%d_%d_%d'%(k,tid,a_branch_nb)) )
 
-                    # literals is used to construct the constraint that if k is used in a given tree at a given leaf/branch
-                    # Then the x's must respect the corresponding branch
-                    literals = []
+                    # The loop right after is used to construct the constraints that if k is used in a given tree at a given leaf/branch
+                    # Then the x's must respect all the splits within the corresponding branch
                     for a_split in a_branch[0]:
-                        if a_split > 0:
-                            literals.append(x_vars[k][abs(a_split) - 1])
-                        elif a_split < 0:
-                            literals.append(x_vars[k][abs(a_split) - 1].Not())
+                        feature_val = a_split[0]
+                        threshold_val = a_split[1]
+                        if feature_val > 0:
+                            model.Add( x_vars[k][abs(feature_val)-1] >= int( math.floor( threshold_val ) ) + 1 ).OnlyEnforceIf( w_vars[k][tid][a_branch_nb] )
+                        elif feature_val < 0:
+                            model.Add(x_vars[k][abs(feature_val) - 1] <= int( math.floor( threshold_val ) ) ).OnlyEnforceIf( w_vars[k][tid][a_branch_nb])
                         else:
                             raise ValueError("Feat 0 shouldn't be used here (1-indexed now)")
-                    # Constraint that enforce consistency between w and x variables
-                    model.AddBoolAnd(literals).OnlyEnforceIf(w_vars[k][tid][a_branch_nb])
-
 
                     for c in range(C):
                         # Variable y represents how many times sample k is used in tree tid, node a_branch_nb,
@@ -2297,12 +1958,12 @@ class DRAFT:
             else:
                 x_sol = np.random.randint(2, size=(N, M))
 
-
-        print("*************************************************************")
-        print("*************************************************************")
-        print("  Solver specific:  Objval = %d,  duration = %g " % (obj_val, duration))
-        print("*************************************************************")
-        print("*************************************************************")
+        if verbosity:
+            print("*************************************************************")
+            print("*************************************************************")
+            print("  Solver specific:  Objval = %d,  duration = %g " % (obj_val, duration))
+            print("*************************************************************")
+            print("*************************************************************")
 
         solve_status = {0: 'UNKNOWN',
                         1: 'MODEL_INVALID',
