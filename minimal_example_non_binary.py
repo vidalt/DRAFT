@@ -71,11 +71,11 @@ x_sol = dict_res['reconstructed_data']
 
 # --------- (debug only / verify correctness of the reconstructed dataset information) --------------
 if debug_check:
-    checked_ohe = check_ohe(X_train, ohe_vector)
+    checked_ohe = check_ohe(x_sol, ohe_vector)
     print("(reconstruction) OHE verified: ", checked_ohe)
-    checked_ordinal_domains = check_domain(X_train, ordinal_attrs)
+    checked_ordinal_domains = check_domain(x_sol, ordinal_attrs)
     print("(reconstruction) Ordinal attributes domains verified: ", checked_ordinal_domains)
-    checked_numerical_domains = check_domain(X_train, numerical_attrs)
+    checked_numerical_domains = check_domain(x_sol, numerical_attrs)
     print("(reconstruction) Numerical attributes domains verified: ", checked_numerical_domains)
     if checked_ohe and checked_ordinal_domains and checked_numerical_domains:
         print("Reconstructed dataset information correct.\n")
