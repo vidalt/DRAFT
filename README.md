@@ -83,7 +83,9 @@ Hereafter is a description of the different files:
 
 * `minimal_example.py` provides a minimal example use of our training set reconstruction tools.
 
-* The `data` folder contains the three binary datasets considered in our experiments and `datasets_infos.py` provides information regarding these datasets (in particular, the list of binary attributes one hot encoding the same original feature).
+* `minimal_example_non_binary.py` provides a minimal example use of our training set reconstruction tools, handling all different types of attributes ((one-hot encoded) categorical ones, binary ones, ordinal ones and numerical ones).
+
+* The `data` folder contains the three binary datasets considered in our experiments and `datasets_infos.py` provides information regarding these datasets (in particular, the list of binary attributes one hot encoding the same original feature). It also contains an additional dataset with ordinal and numerical attributes to illustrate the applicability of our approach on these different types of attributes.
 
 * `utils.py` contains several helper functions used in our experiments, such as `average_error` which computes the average reconstruction error between the proposed reconstruction `x_sol` and the actual training set `x_train_list`. Both must have the same shape. As described in our paper, we first perform a minimum cost matching to determine which reconstructed example corresponds to which actual example. We then compute the average error over all attributes of all (matched) examples and return it.
 
@@ -137,16 +139,28 @@ Results are stored within the `results_{cp-sat, milp, bench, partial_examples, p
 `python3.10 plot_results_target_models_perfs.py`
     * => Generates within the `figures` folder files `{adult, compas, default_credit}_cp-sat_bagging={True, False}_target_models_perfs_{train, test}.pdf`
 
+### On the type of attributes that can be reconstructed
+
+Our `cp-sat` models (with or without bagging) (called whenever `method='cp-sat'` when calling the `.fit` method) support all types of attributes, but the attributes' types have to be provided to the attack, along with their domains (see the next section regarding the attack parameters). An example reconstruction including both (one-hot encoded) categorical variables, binary variables, ordinal variables and numerical ones is provided within the `minimal_example_non_binary.py` file, using the non-binarized Default of Credit Card Client dataset.
+
+Categorical attributes should be one-hot encoded (they could also be treated as ordinal ones but since there is by definition no order relationship between their different values/categories the resulting Random Forest performance could be suboptimal). Ordinal and numerical attributes are directly handled. In a nutshell, ordinal features are directly modelled as integer variables within the CP solver. Numerical ones are discretized to determine within which interval (i.e., between which split values) they lie on, and after running the solver their particular value is fixed to the middle of the associated interval. More details can be found in the Appendix D of our ICML24 paper.
+
 ## Attack Parameters
 
 Our proposed Dataset Reconstruction Attacks against Tree Ensembles are implemented within the `DRAFT` module, contained in the `DRAFT.py` Python file. The different parameters and methods of this module are detailed hereafter:
 
 ## Main methods (base use)
 
-* Constructor: **\__init__(self, random_forest, one_hot_encoded_groups=[])**
+* Constructor: **\__init__(self, random_forest, one_hot_encoded_groups=[], ordinal_attributes=[], numerical_attributes=[])**
     * `random_forest`: *instance of sklearn.ensemble.RandomForestClassifier.* The (target) random forest whose structure will be leveraged to reconstruct its training set.
 
     * `one_hot_encoded_groups`: *list, optional (default []).* List of lists, where each sub-list contains the IDs of a group of attributes corresponding to a one-hot encoding of the same original feature. Not mandatory but if provided, can improve the performed reconstruction and may speed up the process.
+
+    * `ordinal_attributes`: *list, optional (default []).* List of lists, where each sub-list corresponds to an ordinal attribute, and has the form: 
+    `[attribute_id, attribute_lower_bound, attribute_upper_bound]`
+
+    * `numerical_attributes`: *list, optional (default []).* List of lists, where each sub-list corresponds to a numerical attribute, and has the form: 
+    `[attribute_id, attribute_lower_bound, attribute_upper_bound]`
 
 * **fit(self, bagging=False, method='cp-sat', timeout=60, verbosity=True, n_jobs=-1, seed=0)** <br> Reconstructs a dataset compatible with the knowledge provided by `random_forest`, using the provided parameters. In other terms, fits the data to the given model.
 

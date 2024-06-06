@@ -13,6 +13,34 @@ class DRAFT:
         for i in range(k):
             calc += self.proba(i, N)
         return calc
+    
+    # Function to parse the branches and build the list of possible intervals for numerical attributes
+    def compute_numerical_attrs_intervals(self, trees_branches):
+        # Parse all the branches to determine split levels for numerical attributes
+        # and convert their value to integers modelling intervals between them
+        num_indices = [f[0] for f in self.numerical_attrs]
+        for i in range(len(self.numerical_attrs)):
+            self.numerical_attrs[i] = self.numerical_attrs[i] + [[]] + [[]] # adds lists of split values and intervals
+
+        # Retrieve all split values
+        for all_branches_t in trees_branches: # for each tree
+            for a_branch in all_branches_t: # iterate over its branches
+                for a_split in a_branch[0]: # iterate over the splits along the branch
+                    feature_val = abs(a_split[0])-1
+                    threshold_val = a_split[1]
+                    if feature_val in num_indices: # numerical feature
+                        idfeature = num_indices.index(feature_val)
+                        if not(threshold_val in self.numerical_attrs[idfeature][3]):
+                            self.numerical_attrs[idfeature][3].append(threshold_val)
+
+        # Sort them ($\mathcal{A}_i$)
+        for i in range(len(self.numerical_attrs)):
+            self.numerical_attrs[i][3].sort()
+
+        # Concatenate them with bounds ($\mathcal{I}_i$) to get all the possible intervals
+        for i in range(len(self.numerical_attrs)):
+            self.numerical_attrs[i][4] = [self.numerical_attrs[i][1]] + self.numerical_attrs[i][3] + [self.numerical_attrs[i][2]]
+    
 
     def parse_forest(self, clf, verbosity=False):
         """
@@ -172,7 +200,7 @@ class DRAFT:
         return T, M, N, C, Z, max_max_depth, trees_branches, maxcards
     
     # MAIN FUNCTIONS
-    def __init__(self, random_forest, one_hot_encoded_groups=[]):
+    def __init__(self, random_forest, one_hot_encoded_groups=[], ordinal_attributes=[], numerical_attributes=[]):
         """
         Constructor.
 
@@ -187,10 +215,13 @@ class DRAFT:
 
         """
         from sklearn.ensemble import RandomForestClassifier
+        from copy import deepcopy
         if not isinstance(random_forest, RandomForestClassifier):
             raise TypeError("Expected a RandomForestClassifier but provided random_forest is of type " + str(type(random_forest)))
         self.clf = random_forest
         self.ohe_groups = one_hot_encoded_groups
+        self.ordinal_attrs = ordinal_attributes
+        self.numerical_attrs = deepcopy(numerical_attributes) # Since we will modify it to include split values
 
     def fit(self, bagging=False, method='cp-sat', timeout=60, verbosity=True, n_jobs=-1, seed=0):
         """
@@ -232,6 +263,7 @@ class DRAFT:
                 - When method=`milp` (Gurobi solver), it can be "LOADED", "OPTIMAL", "INFEASIBLE", "INF_OR_UNBD", "UNBOUNDED", "CUTOFF", "ITERATION_LIMIT", "NODE_LIMIT", "TIME_LIMIT", "SOLUTION_LIMIT", "INTERRUPTED", "NUMERIC", "SUBOPTIMAL", "INPROGRESS", "USER_OBJ_LIMIT", or "WORK_LIMIT".
             -> 'duration': duration
             -> 'reconstructed_data': array of shape = [n_samples, n_attributes] encoding the reconstructed dataset.
+            Note that if the status is not OPTIMAL or FEASIBLE the reconstruction should not be used.
         """
         if not method in ['cp-sat', 'milp']:
             raise ValueError("Supported methods are either 'cp-sat' or 'milp', got: " + method)
@@ -262,11 +294,13 @@ class DRAFT:
                     self.perform_reconstruction_v2_CP_SAT(n_threads=n_jobs, time_out=timeout, verbosity=verbosity, seed=seed, use_mleobj=use_mleobj, useprobctr=useprobctr )
 
         elif not bagging and method == 'milp':
+            if len(self.ordinal_attrs) > 0 or len(self.numerical_attrs) > 0:
+                raise AttributeError("Currently numerical and ordinal attributes are not supported with MILP formulations.")
             if n_jobs == -1:
                 n_jobs = 0 # value for Gurobi
             self.perform_reconstruction_v1_MILP(n_threads=n_jobs, time_out=timeout, verbosity=int(verbosity), seed=seed)
         else:
-            raise AttributeError("Currently bagging is not supported.")
+            raise AttributeError("Currently bagging is not supported with MILP formulations.")
 
         if hasattr(self, 'result_dict'):
             return self.result_dict
@@ -301,6 +335,7 @@ class DRAFT:
             -> 'status': the solve status returned by the solver. It can be 'UNKNOWN', 'MODEL_INVALID', 'FEASIBLE', 'INFEASIBLE', or 'OPTIMAL'.
             -> 'duration': duration
             -> 'reconstructed_data': array of shape = [n_samples, n_attributes] encoding the reconstructed dataset.
+            Note that if the status is not OPTIMAL or FEASIBLE the reconstruction should not be used.
         """
         from ortools.sat.python import cp_model
         import numpy as np # useful
@@ -319,7 +354,25 @@ class DRAFT:
         ## Variables
         model = cp_model.CpModel()
 
-        x_vars = [[model.NewBoolVar('x_%d_%d' %(k,i)) for i in range(M)] for k in range(N)] # table of x_{ki}
+        # Reconstruction variables
+        ord_indices = [f[0] for f in self.ordinal_attrs] # Ordinal attributes => Integer variables
+        num_indices = [f[0] for f in self.numerical_attrs] # Numerical attributes => Integer variables modelling intervals between two splits
+        self.compute_numerical_attrs_intervals(trees_branches) # Compute the sorted list of all split values for each numerical attribute
+
+        x_vars = [[None] * M for k in range(N)]
+        for i in range(M):
+            if i in ord_indices:
+                idx = ord_indices.index(i)
+                for k in range(N):
+                    x_vars[k][i] = model.NewIntVar(self.ordinal_attrs[idx][1], self.ordinal_attrs[idx][2], 'x_%d_%d' % (k, i) )
+            elif i in num_indices:
+                idx = num_indices.index(i)
+                #print("Num attr ", i, " : ", self.numerical_attrs[idx][4])
+                for k in range(N):
+                    x_vars[k][i] = model.NewIntVar(0, len(self.numerical_attrs[idx][3]), 'x_%d_%d' % (k, i) )
+            else:
+                for k in range(N):
+                    x_vars[k][i] = model.NewBoolVar('x_%d_%d' %(k,i))
 
         # Contraintes
         # one-hot encoding
@@ -340,11 +393,15 @@ class DRAFT:
                             examples_capts[k].append(local_capt_var)
                             for a_split in a_branch[0]:
                                 feature_val = a_split[0]
+                                feature_id = abs(feature_val)-1
                                 threshold_val = a_split[1]
+                                if feature_id in num_indices:
+                                    idx = num_indices.index(feature_id)
+                                    threshold_val = self.numerical_attrs[idx][3].index(threshold_val) # replace the actual split value with its index (interval nb)
                                 if feature_val > 0:
-                                    model.Add( x_vars[k][abs(feature_val)-1] >= int( math.floor( threshold_val ) ) + 1 ).OnlyEnforceIf( local_capt_var )
+                                    model.Add( x_vars[k][feature_id] >= int( math.floor( threshold_val ) ) + 1 ).OnlyEnforceIf( local_capt_var )
                                 elif feature_val < 0:
-                                    model.Add(x_vars[k][abs(feature_val) - 1] <= int( math.floor( threshold_val ) ) ).OnlyEnforceIf( local_capt_var)
+                                    model.Add(x_vars[k][feature_id] <= int( math.floor( threshold_val ) ) ).OnlyEnforceIf( local_capt_var)
                                 else:
                                     raise ValueError("Feat 0 shouldn't be used here (1-indexed now)")
                 for c in range(C):
@@ -381,11 +438,19 @@ class DRAFT:
 
         if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
             x_sol = [[solver.Value(x_vars[k][i]) for i in range(M)] for k in range(N)]
+            # Retrieve actual numerical attributes' values from their assigned interval ID
+            for k in range(N):
+                for i in range(len(self.numerical_attrs)):
+                    attr_id = self.numerical_attrs[i][0]
+                    interval_id = x_sol[k][attr_id]
+                    reconstructed_value = (self.numerical_attrs[i][4][interval_id]+self.numerical_attrs[i][4][interval_id+1])/2
+                    x_sol[k][attr_id]=reconstructed_value
+
         else:
             if status == cp_model.INFEASIBLE or status == cp_model.MODEL_INVALID:
                 raise RuntimeError('Infeasible model: the reconstruction problem has no solution. Please make sure the provided one-hot encoding constraints are correct. Else, report this issue to the developers.')
             else:
-                x_sol = np.random.randint(2,size = (N,M))
+                x_sol = np.random.randint(2,size = (N,M)) # Note that this is just to avoid raising an error but if the status is not OPTIMAL or FEASIBLE the reconstruction should not be used
 
         solve_status = {0: 'UNKNOWN',
         1: 'MODEL_INVALID',
@@ -423,6 +488,7 @@ class DRAFT:
             -> 'status': the solve status returned by the solver. It can be "LOADED", "OPTIMAL", "INFEASIBLE", "INF_OR_UNBD", "UNBOUNDED", "CUTOFF", "ITERATION_LIMIT", "NODE_LIMIT", "TIME_LIMIT", "SOLUTION_LIMIT", "INTERRUPTED", "NUMERIC", "SUBOPTIMAL", "INPROGRESS", "USER_OBJ_LIMIT", or "WORK_LIMIT".
             -> 'duration': duration
             -> 'reconstructed_data': array of shape = [n_samples, n_attributes] encoding the reconstructed dataset.
+            Note that if the status is not OPTIMAL or FEASIBLE the reconstruction should not be used.
         """
         import gurobipy as gp # solver
         import numpy as np # useful
@@ -692,6 +758,7 @@ class DRAFT:
             -> 'status': the solve status returned by the solver. It can be 'UNKNOWN', 'MODEL_INVALID', 'FEASIBLE', 'INFEASIBLE', or 'OPTIMAL'.
             -> 'duration': duration
             -> 'reconstructed_data': array of shape = [n_samples, n_attributes] encoding the reconstructed dataset.
+            Note that if the status is not OPTIMAL or FEASIBLE the reconstruction should not be used.
         """
         import ortools
         from ortools.sat.python import cp_model
@@ -740,8 +807,26 @@ class DRAFT:
         ## Variables
         model = cp_model.CpModel()
 
+        # Reconstruction variables
         # x[k][i] : Variables that represent what is sample k (each of its features i)
-        x_vars = [[model.NewBoolVar('x_%d_%d' % (k, i)) for i in range(M)] for k in range(N)]  # table of x_{ki}
+        ord_indices = [f[0] for f in self.ordinal_attrs] # Ordinal attributes => Integer variables
+        num_indices = [f[0] for f in self.numerical_attrs] # Numerical attributes => Integer variables modelling intervals between two splits
+        self.compute_numerical_attrs_intervals(trees_branches) # Compute the sorted list of all split values for each numerical attribute
+
+        x_vars = [[None] * M for k in range(N)]
+        for i in range(M):
+            if i in ord_indices:
+                idx = ord_indices.index(i)
+                for k in range(N):
+                    x_vars[k][i] = model.NewIntVar(self.ordinal_attrs[idx][1], self.ordinal_attrs[idx][2], 'x_%d_%d' % (k, i) )
+            elif i in num_indices:
+                idx = num_indices.index(i)
+                #print("Num attr ", i, " : ", self.numerical_attrs[idx][4])
+                for k in range(N):
+                    x_vars[k][i] = model.NewIntVar(0, len(self.numerical_attrs[idx][3]), 'x_%d_%d' % (k, i) )
+            else:
+                for k in range(N):
+                    x_vars[k][i] = model.NewBoolVar('x_%d_%d' %(k,i))
 
         # y_vars[k][c][t][v]: Variables that represent the number of times sample k is used as class c
         #   in leaf/branch v of tree t
@@ -753,15 +838,12 @@ class DRAFT:
         # z_vars[k][c]: Variables that represent if sample k is assigned class c
         z_vars = [[model.NewBoolVar('z_%d_%d'%(k,c)) for c in range(C) ] for k in range(N) ]
 
-
         fixedzidx = 0
         for c in range(C):
             mincz = math.floor( maxcards[c] / maxbval)
             for offset in range(mincz):
                 model.Add( z_vars[fixedzidx+offset][c] == 1)
             fixedzidx += mincz
-
-
 
         # eta_vars[k][t]: Variables that count how many times sample k is used in tree t
         eta_vars = [[ model.NewIntVar(0,maxbval, 'eta_%d_%d'%(k,t)) for t in range(ntrees)] for k in range(N) ]
@@ -800,7 +882,6 @@ class DRAFT:
         else:
             model.Minimize( cp_model.LinearExpr.Sum(objfun) )
 
-
         # Contraints
         # one-hot encoding
         for k in range(N):
@@ -838,12 +919,15 @@ class DRAFT:
                     # Then the x's must respect all the splits within the corresponding branch
                     for a_split in a_branch[0]:
                         feature_val = a_split[0]
+                        feature_id = abs(feature_val)-1
                         threshold_val = a_split[1]
-                        # Constraints that enforce consistency between w and x variables
+                        if feature_id in num_indices:
+                            idx = num_indices.index(feature_id)
+                            threshold_val = self.numerical_attrs[idx][3].index(threshold_val) # replace the actual split value with its index (interval nb)
                         if feature_val > 0:
-                            model.Add( x_vars[k][abs(feature_val)-1] >= int( math.floor( threshold_val ) ) + 1 ).OnlyEnforceIf( w_vars[k][tid][a_branch_nb] )
+                            model.Add( x_vars[k][feature_id] >= int( math.floor( threshold_val ) ) + 1 ).OnlyEnforceIf( w_vars[k][tid][a_branch_nb] )
                         elif feature_val < 0:
-                            model.Add(x_vars[k][abs(feature_val) - 1] <= int( math.floor( threshold_val ) ) ).OnlyEnforceIf( w_vars[k][tid][a_branch_nb])
+                            model.Add(x_vars[k][feature_id] <= int( math.floor( threshold_val ) ) ).OnlyEnforceIf( w_vars[k][tid][a_branch_nb])
                         else:
                             raise ValueError("Feat 0 shouldn't be used here (1-indexed now)")
 
@@ -1068,6 +1152,13 @@ class DRAFT:
                         x_sol = np.random.randint(2, size=(N, M))
 
         x_sol = best_x
+        # Retrieve actual numerical attributes' values from their assigned interval ID
+        for k in range(N):
+            for i in range(len(self.numerical_attrs)):
+                attr_id = self.numerical_attrs[i][0]
+                interval_id = x_sol[k][attr_id]
+                reconstructed_value = (self.numerical_attrs[i][4][interval_id]+self.numerical_attrs[i][4][interval_id+1])/2
+                x_sol[k][attr_id]=reconstructed_value
         duration = sum( dur_runs )
         if verbosity:
             print("*************************************************************")
