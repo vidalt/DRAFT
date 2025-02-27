@@ -13,35 +13,7 @@ class DRAFT:
         for i in range(k):
             calc += self.proba(i, N)
         return calc
-    
-    # Function to parse the branches and build the list of possible intervals for numerical attributes
-    def compute_numerical_attrs_intervals(self, trees_branches):
-        # Parse all the branches to determine split levels for numerical attributes
-        # and convert their value to integers modelling intervals between them
-        num_indices = [f[0] for f in self.numerical_attrs]
-        for i in range(len(self.numerical_attrs)):
-            self.numerical_attrs[i] = self.numerical_attrs[i] + [[]] + [[]] # adds lists of split values and intervals
-
-        # Retrieve all split values
-        for all_branches_t in trees_branches: # for each tree
-            for a_branch in all_branches_t: # iterate over its branches
-                for a_split in a_branch[0]: # iterate over the splits along the branch
-                    feature_val = abs(a_split[0])-1
-                    threshold_val = a_split[1]
-                    if feature_val in num_indices: # numerical feature
-                        idfeature = num_indices.index(feature_val)
-                        if not(threshold_val in self.numerical_attrs[idfeature][3]):
-                            self.numerical_attrs[idfeature][3].append(threshold_val)
-
-        # Sort them ($\mathcal{A}_i$)
-        for i in range(len(self.numerical_attrs)):
-            self.numerical_attrs[i][3].sort()
-
-        # Concatenate them with bounds ($\mathcal{I}_i$) to get all the possible intervals
-        for i in range(len(self.numerical_attrs)):
-            self.numerical_attrs[i][4] = [self.numerical_attrs[i][1]] + self.numerical_attrs[i][3] + [self.numerical_attrs[i][2]]
-    
-
+     
     def parse_forest(self, clf, verbosity=False):
         """
         Parses a given Random Forest learnt using the scikit-learn library and returns the different
@@ -87,6 +59,12 @@ class DRAFT:
 
         # Nombre de features du jeu de données étudiées
         M = T[0].n_features_in_
+
+        # Will parse all the branches to determine split levels for numerical features
+        # and convert their value to integers modelling intervals between them
+        num_indices = [f[0] for f in self.numerical_attrs]
+        for i in range(len(self.numerical_attrs)):
+            self.numerical_attrs[i] = self.numerical_attrs[i] + [set()] + [[]] # adds lists of split values and intervals
         
         def retrieve_branches(number_nodes, children_left_list, children_right_list, nodes_features_list, nodes_value_list, nodes_thresholds ):
             """Retrieve decision tree branches"""
@@ -194,6 +172,23 @@ class DRAFT:
 
             trees_branches.append(all_branches)
 
+            # Retrieve all split values for numerical features
+            for a_feat, threshold_val in zip(nodes_features, nodes_thresholds):         
+                feature_val = a_feat-1
+                if feature_val in num_indices: # numerical feature
+                    idfeature = num_indices.index(feature_val)
+                    #if not(threshold_val in self.numerical_attrs[idfeature][3]): # useless now since we use sets (more efficient)
+                    self.numerical_attrs[idfeature][3].add(threshold_val)
+
+        # Sort the split levels ($\mathcal{A}_i$) for numerical features
+        for i in range(len(self.numerical_attrs)):
+            self.numerical_attrs[i][3] = list(self.numerical_attrs[i][3])
+            self.numerical_attrs[i][3].sort()
+
+        # Concatenate the split levels with bounds ($\mathcal{I}_i$) to get all the possible intervals for numerical features
+        for i in range(len(self.numerical_attrs)):
+            self.numerical_attrs[i][4] = [self.numerical_attrs[i][1]] + self.numerical_attrs[i][3] + [self.numerical_attrs[i][2]]
+
         if verbosity:
             print("RF parsing done!")
 
@@ -212,6 +207,20 @@ class DRAFT:
         one_hot_encoded_groups: list, optional
                         list of lists, where each sub-list contains the IDs of a group of attributes corresponding to a one-hot encoding of the same original feature.
                         not mandatory but if provided, can improve the performed reconstruction and may speed up the process
+
+        ordinal_attributes: list, optional
+                        list of lists, where each sub-list contains the ID of an ordinal attribute
+                        (i.e., an attribute taking values within a discrete set of ordered values),
+                        followed by the lower and upper bounds of its domain.
+                        
+        numerical_attributes: list, optional
+                list of lists, where each sub-list contains the ID of a numerical attribute
+                (i.e., an attribute taking values in a continuous domain),
+                followed by the lower and upper bounds of its domain.
+
+        For formatting of the features' domains-related attributes
+            (one_hot_encoded_groups, ordinal_attributes, and numerical_attributes),
+            see an example at https://github.com/vidalt/DRAFT/blob/main/datasets_infos.py
 
         """
         from sklearn.ensemble import RandomForestClassifier
@@ -357,7 +366,6 @@ class DRAFT:
         # Reconstruction variables
         ord_indices = [f[0] for f in self.ordinal_attrs] # Ordinal attributes => Integer variables
         num_indices = [f[0] for f in self.numerical_attrs] # Numerical attributes => Integer variables modelling intervals between two splits
-        self.compute_numerical_attrs_intervals(trees_branches) # Compute the sorted list of all split values for each numerical attribute
 
         x_vars = [[None] * M for k in range(N)]
         for i in range(M):
@@ -811,7 +819,6 @@ class DRAFT:
         # x[k][i] : Variables that represent what is sample k (each of its features i)
         ord_indices = [f[0] for f in self.ordinal_attrs] # Ordinal attributes => Integer variables
         num_indices = [f[0] for f in self.numerical_attrs] # Numerical attributes => Integer variables modelling intervals between two splits
-        self.compute_numerical_attrs_intervals(trees_branches) # Compute the sorted list of all split values for each numerical attribute
 
         x_vars = [[None] * M for k in range(N)]
         for i in range(M):
