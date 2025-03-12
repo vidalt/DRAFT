@@ -1,0 +1,15 @@
+{
+    "values": {
+        "n_trees": 100,
+        "max_depth": null,
+        "real_max_depth": 13,
+        "seed": 3,
+        "accuracy test": 0.7649652592196686,
+        "accuracy train": 1.0,
+        "solve_status": "OPTIMAL",
+        "mean-error": 0.0,
+        "random_error": 0.28313333333333335,
+        "solve_duration_time": 47.25833606719971,
+        "train_size": 50
+    }
+}
