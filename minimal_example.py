@@ -8,15 +8,15 @@ df = pd.read_csv("data/compas.csv")
 df = df.sample(n=50, random_state = 0, ignore_index= True)
 X_train, X_test, y_train, y_test = data_splitting(df, "recidivate-within-two-years:1", test_size=40, seed=42)
 
-# Train a Random Forest (without bootstrap sampling)
-clf = RandomForestClassifier(bootstrap = False, random_state = 0)
+# Train a Random Forest
+clf = RandomForestClassifier()
 clf = clf.fit(X_train, y_train)
 
 # Reconstruct the Random Forest's training set
 from DRAFT import DRAFT
 
 extractor = DRAFT(clf)
-dict_res = extractor.fit(bagging=False, method="cp-sat", timeout=60, verbosity=False, n_jobs=-1, seed=42) 
+dict_res = extractor.fit(timeout=60) 
 
 # Retrieve solving time and reconstructed data
 duration = dict_res['duration']

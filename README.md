@@ -1,6 +1,7 @@
 # DRAFT: Dataset Reconstruction Attack From Trained ensembles. 
 
 This repository contains the implementation of our proposed dataset reconstruction attacks against Random Forests, introduced in the paper **"Trained Random Forests Completely Reveal your Dataset"** authored by Julien Ferry, Ricardo Fukasawa, Timothée Pascal, and Thibaut Vidal (2024). 
+Check the paper in [the conference proceedings](https://proceedings.mlr.press/v235/ferry24a.html) !
 
 ## Installation
 
@@ -44,15 +45,15 @@ df = pd.read_csv("data/compas.csv")
 df = df.sample(n=50, random_state = 0, ignore_index= True)
 X_train, X_test, y_train, y_test = data_splitting(df, "recidivate-within-two-years:1", test_size=40, seed=42)
 
-# Train a Random Forest (without bootstrap sampling)
-clf = RandomForestClassifier(bootstrap = False, random_state = 0)
+# Train a Random Forest
+clf = RandomForestClassifier()
 clf = clf.fit(X_train, y_train)
 
 # Reconstruct the Random Forest's training set
 from DRAFT import DRAFT
 
 extractor = DRAFT(clf)
-dict_res = extractor.fit(bagging=False, method="cp-sat", timeout=60, verbosity=False, n_jobs=-1, seed=42) 
+dict_res = extractor.fit(timeout=60) 
 
 # Retrieve solving time and reconstructed data
 duration = dict_res['duration']
@@ -70,7 +71,7 @@ Expected output:
 
 ``` bash
 
-Complete solving duration : 0.348616361618042
+Complete solving duration : 0.7555451393127441
 Reconstruction Error:  0.0
 
 ```
@@ -88,6 +89,10 @@ Hereafter is a description of the different files:
 * The `data` folder contains the three binary datasets considered in our experiments and `datasets_infos.py` provides information regarding these datasets (in particular, the list of binary attributes one hot encoding the same original feature). It also contains an additional dataset with ordinal and numerical attributes to illustrate the applicability of our approach on these different types of attributes.
 
 * `utils.py` contains several helper functions used in our experiments, such as `average_error` which computes the average reconstruction error between the proposed reconstruction `x_sol` and the actual training set `x_train_list`. Both must have the same shape. As described in our paper, we first perform a minimum cost matching to determine which reconstructed example corresponds to which actual example. We then compute the average error over all attributes of all (matched) examples and return it.
+
+## Quick Note on Bagging
+
+When bootstrap sampling (bagging) is not used to train the RandomForest, we provide both MILP and CP models. Each example is used exactly once to train each tree. When bagging is used, we additionally have to guess how many times each example was used to fit each tree. For scikit-learn versions >= 1.4.0, this information is directly provided within the RandomForestClassifier object, so we try to retrieve it. If it is not available (as was the case when we wrote our paper), we optimize the likelihood of the inferred numbers of occurences of each examples within each tree's training set. Note that in this case, the reconstruction might be less accurate and take more time and memory.
 
 ### To launch our experiments
 
@@ -164,7 +169,7 @@ Our proposed Dataset Reconstruction Attacks against Tree Ensembles are implement
 
 * **fit(self, bagging=False, method='cp-sat', timeout=60, verbosity=True, n_jobs=-1, seed=0)** <br> Reconstructs a dataset compatible with the knowledge provided by `random_forest`, using the provided parameters. In other terms, fits the data to the given model.
 
-    * `bagging`: *bool, optional (default False).* Indicates whether bootstrap sampling was used to train the base learners. The reconstruction model will be constructed accordingly.
+    * `bagging`: *bool, optional (default None).* Indicates whether bootstrap sampling was used to train the base learners. The reconstruction model will be constructed accordingly. When None, we retrieve the value set within the provided RandomForet attributes.
 
     * `method`: *str in {'cp-sat', 'milp'}, optional (default 'cp-sat').* The type of formulation that will be used to perform the reconstruction. Note that `cp-sat` requires the OR-Tools Python library and `milp` the GurobiPy one (see the **Installation** section of this README).
 
