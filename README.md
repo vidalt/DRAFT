@@ -169,7 +169,7 @@ Our proposed Dataset Reconstruction Attacks against Tree Ensembles are implement
 
 * **fit(self, bagging=False, method='cp-sat', timeout=60, verbosity=True, n_jobs=-1, seed=0)** <br> Reconstructs a dataset compatible with the knowledge provided by `random_forest`, using the provided parameters. In other terms, fits the data to the given model.
 
-    * `bagging`: *bool, optional (default None).* Indicates whether bootstrap sampling was used to train the base learners. The reconstruction model will be constructed accordingly. When None, we retrieve the value set within the provided RandomForet attributes.
+    * `bagging`: *bool, optional (default None).* Indicates whether bootstrap sampling was used to train the base learners. The reconstruction model will be constructed accordingly. When None, we retrieve the value set within the provided RandomForestClassifier 'bootstrap' attribute.
 
     * `method`: *str in {'cp-sat', 'milp'}, optional (default 'cp-sat').* The type of formulation that will be used to perform the reconstruction. Note that `cp-sat` requires the OR-Tools Python library and `milp` the GurobiPy one (see the **Installation** section of this README).
 
