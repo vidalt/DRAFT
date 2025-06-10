@@ -90,7 +90,7 @@ Hereafter is a description of the different files:
 
 * `utils.py` contains several helper functions used in our experiments, such as `average_error` which computes the average reconstruction error between the proposed reconstruction `x_sol` and the actual training set `x_train_list`. Both must have the same shape. As described in our paper, we first perform a minimum cost matching to determine which reconstructed example corresponds to which actual example. We then compute the average error over all attributes of all (matched) examples and return it.
 
-## Quick Note on Bagging
+### Quick Note on Bagging
 
 When bootstrap sampling (bagging) is not used to train the RandomForest, we provide both MILP and CP models. Each example is used exactly once to train each tree. When bagging is used, we additionally have to guess how many times each example was used to fit each tree. For scikit-learn versions >= 1.4.0, this information is directly provided within the RandomForestClassifier object, so we try to retrieve it. If it is not available (as was the case when we wrote our paper), we optimize the likelihood of the inferred numbers of occurences of each examples within each tree's training set. Note that in this case, the reconstruction might be less accurate and take more time and memory.
 
