@@ -92,7 +92,7 @@ Hereafter is a description of the different files:
 
 ### Quick Note on Bagging
 
-When bootstrap sampling (bagging) is not used to train the RandomForestClassifier, we provide both MILP and CP models. Each example is used exactly once to train each tree. When bagging is used, we only provide a CP formulation. We additionally have to guess how many times each example was used to fit each tree. For scikit-learn versions >= 1.4.0, this information is directly provided within the RandomForestClassifier object, so we try to retrieve it. If it is not available (as was the case when we wrote our paper), we optimize the likelihood of the inferred numbers of occurences of each example within each tree's training set. Note that in this case, the reconstruction might be less accurate and take more time and memory.
+When bootstrap sampling (bagging) is not used to train the RandomForestClassifier, we provide both Mixed Integer Linear Programming (MILP) and Constraint Programming (CP) models. Each example is used exactly once to train each tree. When bagging is used, we only provide a CP formulation. We additionally have to guess how many times each example was used to fit each tree. For scikit-learn versions >= 1.4.0, this information is directly provided within the RandomForestClassifier object, so we try to retrieve it. If it is not available (as was the case when we wrote our paper), we optimize the likelihood of the inferred numbers of occurences of each example within each tree's training set. Note that in this case, the reconstruction might be less accurate and take more time and memory.
 
 ### To launch our experiments
 
