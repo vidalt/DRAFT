@@ -94,6 +94,12 @@ Hereafter is a description of the different files:
 
 When bootstrap sampling (bagging) is not used to train the RandomForestClassifier, we provide both Mixed Integer Linear Programming (MILP) and Constraint Programming (CP) models. Each example is used exactly once to train each tree. When bagging is used, we only provide a CP formulation. We additionally have to guess how many times each example was used to fit each tree. For scikit-learn versions >= 1.4.0, this information is directly provided within the RandomForestClassifier object, so we try to retrieve it. If it is not available (as was the case when we wrote our paper), we optimize the likelihood of the inferred numbers of occurences of each example within each tree's training set. Note that in this case, the reconstruction might be less accurate and take more time and memory.
 
+### Quick Note on the type of attributes that can be reconstructed
+
+Our `cp-sat` models (with or without bagging) (called whenever `method='cp-sat'` when calling the `.fit` method) support all types of attributes, but the attributes' types have to be provided to the attack, along with their domains (see the next section regarding the attack parameters). An example reconstruction including both (one-hot encoded) categorical variables, binary variables, ordinal variables and numerical ones is provided within the `minimal_example_non_binary.py` file, using the non-binarized Default of Credit Card Client dataset.
+
+Categorical attributes should be one-hot encoded (they could also be treated as ordinal ones but since there is by definition no order relationship between their different values/categories the resulting Random Forest performance could be suboptimal). Ordinal and numerical attributes are directly handled. In a nutshell, ordinal features are directly modelled as integer variables within the CP solver. Numerical ones are discretized to determine within which interval (i.e., between which split values) they lie on, and after running the solver their particular value is fixed to the middle of the associated interval. More details can be found in the Appendix D of our [ICML24 paper](https://proceedings.mlr.press/v235/ferry24a.html).
+
 ### To launch our experiments
 
 Main experiments file is `data_extraction_from_rf_experiments.py`. It can be run with:
@@ -143,12 +149,6 @@ Results are stored within the `results_{cp-sat, milp, bench, partial_examples, p
 * To plot the performances (train and test) of the target models (i.e., the random forests):
 `python3.10 plot_results_target_models_perfs.py`
     * => Generates within the `figures` folder files `{adult, compas, default_credit}_cp-sat_bagging={True, False}_target_models_perfs_{train, test}.pdf`
-
-### On the type of attributes that can be reconstructed
-
-Our `cp-sat` models (with or without bagging) (called whenever `method='cp-sat'` when calling the `.fit` method) support all types of attributes, but the attributes' types have to be provided to the attack, along with their domains (see the next section regarding the attack parameters). An example reconstruction including both (one-hot encoded) categorical variables, binary variables, ordinal variables and numerical ones is provided within the `minimal_example_non_binary.py` file, using the non-binarized Default of Credit Card Client dataset.
-
-Categorical attributes should be one-hot encoded (they could also be treated as ordinal ones but since there is by definition no order relationship between their different values/categories the resulting Random Forest performance could be suboptimal). Ordinal and numerical attributes are directly handled. In a nutshell, ordinal features are directly modelled as integer variables within the CP solver. Numerical ones are discretized to determine within which interval (i.e., between which split values) they lie on, and after running the solver their particular value is fixed to the middle of the associated interval. More details can be found in the Appendix D of our ICML24 paper.
 
 ## Attack Parameters
 

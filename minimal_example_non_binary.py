@@ -6,7 +6,6 @@ from datasets_infos import datasets_ohe_vectors, predictions, datasets_ordinal_a
 import numpy as np 
 
 script_seed = 42
-use_bootstrap = False
 sample_size = 1500
 train_size = 40
 dataset = "default_credit_numerical"
@@ -57,14 +56,14 @@ if debug_check:
 # ----------------------------------------------------------------------------------------------
 
 # Train a Random Forest (without bootstrap sampling)
-clf = RandomForestClassifier(bootstrap = use_bootstrap, random_state = script_seed)
+clf = RandomForestClassifier(random_state = script_seed)
 clf = clf.fit(X_train, y_train)
 
 # Reconstruct the Random Forest's training set
 from DRAFT import DRAFT
 
 extractor = DRAFT(clf, one_hot_encoded_groups=ohe_vector, ordinal_attributes=ordinal_attrs, numerical_attributes=numerical_attrs)
-dict_res = extractor.fit(bagging=use_bootstrap, method="cp-sat", timeout=180, verbosity=False, n_jobs=-1, seed=script_seed) 
+dict_res = extractor.fit(timeout=60, seed=script_seed) 
 
 # Retrieve solving time and reconstructed data
 duration = dict_res['duration']
@@ -85,18 +84,18 @@ if debug_check:
         raise ValueError("Dataset information/reconstruction error.")
 # ----------------------------------------------------------------------------------------------
 
-print("Complete solving duration :", duration)
-
 # Evaluate the reconstruction error
 e_mean, list_matching = average_error(x_sol, X_train, dataset_ordinal=ordinal_attrs, dataset_numerical=numerical_attrs)
 
 # Print the pairs of original/reconstructed examples
 if debug_check:
     for k in range(len(x_sol)):
-        print(x_sol[k])
-        print(list(X_train[list_matching[k]]))
+        print("Reconstructed example %d:" %k, x_sol[k])
+        print("Original example %d:" %k, list(X_train[list_matching[k]]))
         print("dist=",dist_individus(x_sol[k],list(X_train[list_matching[k]]), non_binary_attrs=ordinal_attrs+numerical_attrs))
         print()
+
+print("Complete solving duration :", duration)
 
 print("Reconstruction Error: ", e_mean)
 
