@@ -14,6 +14,18 @@ class DRAFT:
             calc += self.proba(i, N)
         return calc
      
+    def compute_max_b_val(self, N, maxbvalmaxvalue, confidence):
+        maxbval = 0
+        cumulated_probas = 0
+        for occ in range(0,maxbvalmaxvalue):
+            #print("P(#occs >= %d) = %.10f" %(occ, 1-cumulated_probas))
+            if (1-cumulated_probas) < confidence:
+                maxbval = occ
+                break
+            cumulated_probas += self.proba(occ, N)
+        #print("Retained value for maxbval = %d as P(#occs >= %d) = %.10f" %(maxbval, maxbval, self.proba_inf(maxbval, N)))
+        return maxbval
+
     def parse_forest(self, clf, verbosity=False):
         """
         Parses a given Random Forest learnt using the scikit-learn library and returns the different
@@ -811,9 +823,6 @@ class DRAFT:
         import numpy as np  # useful
         import time  # time measurements
 
-        # This is the maximum number of times a sample can appear in a tree (note it will go from 0 to maxbval-1)
-        maxbval = 8
-
         clf = self.clf
         one_hot_encoded_groups = self.ohe_groups
       
@@ -837,6 +846,13 @@ class DRAFT:
             else:
                 warnings.warn("Couln't retrieve the parameter estimators_samples_ from the given RF, will try to infer and optimize it.")
   
+        # This is the maximum number of times a sample can appear in a tree (note it will go from 0 to maxbval-1)
+        # We fix maxbval to ensure that P(actual #occs >= maxbval) < confidence
+        maxbvalmaxvalue = 12
+        confidence = 1e-5
+
+        maxbval = self.compute_max_b_val(N, maxbvalmaxvalue, confidence)  
+        # ------------------------------------------------------------------------
 
         # Defines the probabilities that an item will appear b times
         P = []
@@ -1147,9 +1163,6 @@ class DRAFT:
         import numpy as np  # useful
         import time  # time measurements
 
-        # This is the maximum number of times a sample can appear in a tree (note it will go from 0 to maxbval-1)
-        maxbval = 8
-
         clf = self.clf
         one_hot_encoded_groups = self.ohe_groups
 
@@ -1159,6 +1172,14 @@ class DRAFT:
 
         ## Parse the forest
         T, M, N, C, Z, max_max_depth, trees_branches, maxcards = self.parse_forest(clf, verbosity=verbosity)
+
+        # This is the maximum number of times a sample can appear in a tree (note it will go from 0 to maxbval-1)
+        # We fix maxbval to ensure that P(actual #occs >= maxbval) < confidence
+        maxbvalmaxvalue = 12
+        confidence = 1e-5
+
+        maxbval = self.compute_max_b_val(N, maxbvalmaxvalue, confidence)  
+        # ------------------------------------------------------------------------
 
         # Defines the probabilities that an item will appear b times
         P = []
@@ -1412,9 +1433,6 @@ class DRAFT:
         import numpy as np  # useful
         import time  # time measurements
 
-        # This is the maximum number of times a sample can appear in a tree (note it will go from 0 to maxbval-1)
-        maxbval = 8
-
         clf = self.clf
         one_hot_encoded_groups = self.ohe_groups
 
@@ -1424,6 +1442,14 @@ class DRAFT:
 
         ## Parse the forest
         T, M, N, C, Z, max_max_depth, trees_branches, maxcards = self.parse_forest(clf, verbosity=verbosity)
+
+        # This is the maximum number of times a sample can appear in a tree (note it will go from 0 to maxbval-1)
+        # We fix maxbval to ensure that P(actual #occs >= maxbval) < confidence
+        maxbvalmaxvalue = 12
+        confidence = 1e-5
+
+        maxbval = self.compute_max_b_val(N, maxbvalmaxvalue, confidence)  
+        # ------------------------------------------------------------------------
 
         # Defines the probabilities that an item will appear b times
         P = []
@@ -1657,10 +1683,6 @@ class DRAFT:
         import numpy as np  # useful
         import time  # time measurements
 
-
-        # This is the maximum number of times a sample can appear in a tree (note it will go from 0 to maxbval-1)
-        maxbval = 8
-
         clf = self.clf
         one_hot_encoded_groups = self.ohe_groups
 
@@ -1670,6 +1692,14 @@ class DRAFT:
 
         ## Parse the forest
         T, M, N, C, Z, max_max_depth, trees_branches, maxcards = self.parse_forest(clf, verbosity=verbosity)
+
+        # This is the maximum number of times a sample can appear in a tree (note it will go from 0 to maxbval-1)
+        # We fix maxbval to ensure that P(actual #occs >= maxbval) < confidence
+        maxbvalmaxvalue = 12
+        confidence = 1e-5
+
+        maxbval = self.compute_max_b_val(N, maxbvalmaxvalue, confidence)  
+        # ------------------------------------------------------------------------
 
         # Defines the probabilities that an item will appear b times
         P = []
