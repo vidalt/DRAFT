@@ -846,25 +846,24 @@ class DRAFT:
             else:
                 warnings.warn("Couln't retrieve the parameter estimators_samples_ from the given RF, will try to infer and optimize it.")
   
-        # This is the maximum number of times a sample can appear in a tree (note it will go from 0 to maxbval-1)
+        # maxbval is exclusive: occurrence counts range from 0 to maxbval-1.
         # We fix maxbval to ensure that P(actual #occs >= maxbval) < confidence
         maxbvalmaxvalue = 12
         confidence = 1e-5
 
-        maxbval = self.compute_max_b_val(N, maxbvalmaxvalue, confidence)  
+        maxbval = self.compute_max_b_val(N, maxbvalmaxvalue, confidence)
+        if true_occurences is not None:
+            # Known counts must remain representable, even in the rare tail.
+            true_counts = [np.unique(indices, return_counts=True) for indices in true_occurences]
+            max_occs = max(int(counts.max()) for _, counts in true_counts)
+            maxbval = max(maxbval, max_occs + 1)
         # ------------------------------------------------------------------------
 
         # Defines the probabilities that an item will appear b times
-        P = []
-        Pexact = [0 for i in range(maxbval)]
-        for i in range(maxbval):
-            #P.append( 1 - self.proba_inf(i + 1, N) )
-            P.append(1 - self.proba_inf(i , N))
-        for i in range(maxbval):
-            if i < maxbval - 1:
-                Pexact[i] = P[i] - P[i+1]
-            else:
-                Pexact[i] = P[i]
+        # Evaluate the tail directly to avoid cancellation for large known counts.
+        P = [binom.sf(i - 1, N, 1 / N) for i in range(maxbval)]
+        Pexact = [self.proba(i, N) for i in range(maxbval)]
+        Pexact[-1] = P[-1]
 
         '''if verbosity:
             print("Probabilities of an item appearing at least b times:")
@@ -912,7 +911,7 @@ class DRAFT:
 
 
         # eta_vars[k][t]: Variables that count how many times sample k is used in tree t
-        eta_vars = [[ model.NewIntVar(0,maxbval, 'eta_%d_%d'%(k,t)) for t in range(ntrees)] for k in range(N) ]
+        eta_vars = [[ model.NewIntVar(0,maxbval - 1, 'eta_%d_%d'%(k,t)) for t in range(ntrees)] for k in range(N) ]
 
         # q_vars[k][t][b] Variables that represent if sample k appears b times in tree t (needed for objective function)
         q_vars = [[[model.NewBoolVar('q_%d_%d_%d' %( t, k, b )) for b in range(maxbval) ] for t in range(ntrees) ] for k in range(N) ]
@@ -928,17 +927,13 @@ class DRAFT:
         else: # Could retrieve #occurences, pre-fix them!
             all_indices = [k for k in range(N)]
             for t in range(ntrees):
-                max_occs = -1
-                list_indices_t = true_occurences[t]
-                occurences_t = np.unique(list_indices_t, return_counts=True)
+                occurences_t = true_counts[t]
                 assert(sum(occurences_t[1]) == N)
-                if max(occurences_t[1]) > max_occs:
-                    max_occs = max(occurences_t[1])
                 for occ_id, occ_nb in zip(occurences_t[0], occurences_t[1]):
                     model.Add(eta_vars[occ_id][t] == occ_nb)
                 for occ_id in np.setdiff1d(all_indices, occurences_t[0]):
                     model.Add(eta_vars[occ_id][t] == 0)
-                assert(max_occs <= maxbval)
+                assert(max(occurences_t[1]) < maxbval)
         if use_mleobj == 0:
             # obj_vars[t][b]: Variables that will capture the difference between sum_{k} q_{tkb}  - N * p_b, for fixed t and b
             obj_vars = [ [ model.NewIntVar(-N,N, 'obj_%d_%d' % (t,b) ) for b in range(maxbval) ] for t in range(ntrees) ]
@@ -1260,7 +1255,7 @@ class DRAFT:
 
 
         # eta_vars[k][t]: Variables that count how many times sample k is used in tree t
-        eta_vars = [[ model.NewIntVar(0,maxbval, 'eta_%d_%d'%(k,t)) for t in range(ntrees)] for k in range(N) ]
+        eta_vars = [[ model.NewIntVar(0,maxbval - 1, 'eta_%d_%d'%(k,t)) for t in range(ntrees)] for k in range(N) ]
 
         # q_vars[k][t][b] Variables that represent if sample k appears b times in tree t (needed for objective function
         q_vars = [[[model.NewBoolVar('q_%d_%d_%d' %( t, k, b )) for b in range(maxbval) ] for t in range(ntrees) ] for k in range(N) ]
@@ -1503,7 +1498,7 @@ class DRAFT:
             print("==> bench partial reconstr (attributes): prefixed %d attributes" %len(known_attributes))
 
         # eta_vars[k][t]: Variables that count how many times sample k is used in tree t
-        eta_vars = [[ model.NewIntVar(0,maxbval, 'eta_%d_%d'%(k,t)) for t in range(ntrees)] for k in range(N) ]
+        eta_vars = [[ model.NewIntVar(0,maxbval - 1, 'eta_%d_%d'%(k,t)) for t in range(ntrees)] for k in range(N) ]
 
         # q_vars[k][t][b] Variables that represent if sample k appears b times in tree t (needed for objective function
         q_vars = [[[model.NewBoolVar('q_%d_%d_%d' %( t, k, b )) for b in range(maxbval) ] for t in range(ntrees) ] for k in range(N) ]
@@ -1743,7 +1738,7 @@ class DRAFT:
         z_vars = [[model.NewBoolVar('z_%d_%d'%(k,c)) for c in range(C) ] for k in range(N) ]
 
         # eta_vars[k][t]: Variables that count how many times sample k is used in tree t
-        eta_vars = [[ model.NewIntVar(0,maxbval, 'eta_%d_%d'%(k,t)) for t in range(ntrees)] for k in range(N) ]
+        eta_vars = [[ model.NewIntVar(0,maxbval - 1, 'eta_%d_%d'%(k,t)) for t in range(ntrees)] for k in range(N) ]
 
         # q_vars[k][t][b] Variables that represent if sample k appears b times in tree t (needed for objective function
         q_vars = [[[model.NewBoolVar('q_%d_%d_%d' %( t, k, b )) for b in range(maxbval) ] for t in range(ntrees) ] for k in range(N) ]
