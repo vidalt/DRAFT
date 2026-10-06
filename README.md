@@ -1,4 +1,4 @@
-# DRAFT: Dataset Reconstruction Attacks From Trained ensembles
+# DRAFT: Dataset Reconstruction Attacks From Tree ensembles
 
 Reconstruct training data from a trained random forest using **DRAFT** (ICML 2024), or from the supported differentially private forest using **DRAFT-DP** (SaTML 2026).
 
