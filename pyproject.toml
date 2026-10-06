@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "draft-reconstruction"
+version = "2.0.0"
+description = "Training-set reconstruction from random forests, with and without differential privacy"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+dependencies = [
+  "numpy>=2.0.2,<3",
+  "scipy>=1.13,<2",
+  "pandas>=2.2,<3",
+  "scikit-learn>=1.4,<1.9",
+  "ortools>=9.9,<9.16",
+  "diffprivlib>=0.6.6,<0.7",
+]
+
+[project.optional-dependencies]
+notebook = ["jupyterlab>=4,<5", "ipykernel>=6", "nbformat>=5", "nbclient>=0.10"]
+milp = ["gurobipy>=10,<14"]
+dev = ["pytest>=8,<10"]
+
+[project.urls]
+Repository = "https://github.com/vidalt/DRAFT"
+"DP research code" = "https://github.com/vidalt/DRAFT-DP"
+
+[tool.setuptools]
+py-modules = ["DRAFT", "DP_RF_solver", "DP_RF", "utils", "datasets_infos", "_validation"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

@@ -1,7 +1,7 @@
-scipy
-numpy
-scikit-learn
-pandas
-matplotlib
-ortools
-gurobipy
+# Core dependencies; install the notebook extra with pip install -e ".[notebook]".
+numpy>=2.0.2,<3
+scipy>=1.13,<2
+pandas>=2.2,<3
+scikit-learn>=1.4,<1.9
+ortools>=9.9,<9.16
+diffprivlib>=0.6.6,<0.7

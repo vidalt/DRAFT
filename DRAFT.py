@@ -5,16 +5,16 @@ class DRAFT:
 
     # HELPER FUNCTIONS
     # Functions to calculate probabilities for the bagging model
-    def proba(self, k, N):
+    def _proba(self, k, N):
         return binom.pmf(k, N, 1 / N)
 
-    def proba_inf(self, k, N):
+    def _proba_inf(self, k, N):
         calc = 0
         for i in range(k):
-            calc += self.proba(i, N)
+            calc += self._proba(i, N)
         return calc
-     
-    def compute_max_b_val(self, N, maxbvalmaxvalue, confidence):
+
+    def _compute_max_b_val(self, N, maxbvalmaxvalue, confidence):
         maxbval = 0
         cumulated_probas = 0
         for occ in range(0,maxbvalmaxvalue):
@@ -22,11 +22,11 @@ class DRAFT:
             if (1-cumulated_probas) < confidence:
                 maxbval = occ
                 break
-            cumulated_probas += self.proba(occ, N)
-        #print("Retained value for maxbval = %d as P(#occs >= %d) = %.10f" %(maxbval, maxbval, self.proba_inf(maxbval, N)))
+            cumulated_probas += self._proba(occ, N)
+        #print("Retained value for maxbval = %d as P(#occs >= %d) = %.10f" %(maxbval, maxbval, self._proba_inf(maxbval, N)))
         return maxbval
 
-    def parse_forest(self, clf, verbosity=False):
+    def _parse_forest(self, clf, verbosity=False):
         """
         Parses a given Random Forest learnt using the scikit-learn library and returns the different
         values needed to build our reconstruction models.
@@ -72,7 +72,7 @@ class DRAFT:
         # Nombre de features du jeu de données étudiées
         M = T[0].n_features_in_
 
-        # Nombre de classes vues au total 
+        # Nombre de classes vues au total
         # Note that np.unique does not work if classes_ are not of the same dimension, which can happen
         unique_classes = set()
         for tree in T:
@@ -86,7 +86,7 @@ class DRAFT:
         num_indices = [f[0] for f in self.numerical_attrs]
         for i in range(len(self.numerical_attrs)):
             self.numerical_attrs[i] = self.numerical_attrs[i] + [set()] + [[]] # adds lists of split values and intervals
-        
+
         def retrieve_branches(number_nodes, children_left_list, children_right_list, nodes_features_list, nodes_value_list, nodes_thresholds ):
             """Retrieve decision tree branches"""
 
@@ -114,9 +114,9 @@ class DRAFT:
                     # Iterate over previous paths to add nodes
                     for index, path in enumerate(paths):
                         if origin == path[-1]:
-                            path[-1] = [-nodes_features_list[origin], nodes_thresholds[origin]] 
+                            path[-1] = [-nodes_features_list[origin], nodes_thresholds[origin]]
                             paths[index] = path + [end_l]
-                            path[-1] = [nodes_features_list[origin], nodes_thresholds[origin]] 
+                            path[-1] = [nodes_features_list[origin], nodes_thresholds[origin]]
                             paths.append(path + [end_r])
 
                     # Initialize path in first iteration
@@ -136,12 +136,12 @@ class DRAFT:
 
             # Depending on sklearn version different parsing must be done here
             sklearn_version = str(sklearn.__version__).split(".")
-            if int(sklearn_version[0]) <= 1 and int(sklearn_version[1]) <= 3:
+            if (int(sklearn_version[0]) <= 1 and int(sklearn_version[1]) <= 3) or self.is_DP_RF:
                 nodes_value = t.value # For all nodes in the tree, list of their value (support for both classes)
             else:
                 total_examples = t.weighted_n_node_samples
                 nodes_value = deepcopy(t.value) # For all nodes in the tree, list of their value (relative support for both classes)
-                for i in range(len(nodes_value)):     # For each node           
+                for i in range(len(nodes_value)):     # For each node
                     #print(total_examples[i], nodes_value[i])
                     for j in range(len(nodes_value[i][0])):
                         nodes_value[i][0][j] = np.round(nodes_value[i][0][j] * total_examples[i], decimals=0)
@@ -199,7 +199,7 @@ class DRAFT:
                     new_nodes_values.append([new_value])
                 nodes_value = new_nodes_values
                 #print(nodes_value[2])
-                            
+
             if n_nodes == 1: # Special case if there is only the root
                 #if tree.n_classes_ == C:
                 all_branches = [[[], list(nodes_value[0][0])]]
@@ -213,7 +213,7 @@ class DRAFT:
             trees_branches.append(all_branches)
 
             # Retrieve all split values for numerical features
-            for a_feat, threshold_val in zip(nodes_features, nodes_thresholds):         
+            for a_feat, threshold_val in zip(nodes_features, nodes_thresholds):
                 feature_val = a_feat-1
                 if feature_val in num_indices: # numerical feature
                     idfeature = num_indices.index(feature_val)
@@ -233,9 +233,9 @@ class DRAFT:
             print("RF parsing done!")
 
         return T, M, N, C, Z, max_max_depth, trees_branches, maxcards
-    
+
     # MAIN FUNCTIONS
-    def __init__(self, random_forest, one_hot_encoded_groups=[], ordinal_attributes=[], numerical_attributes=[]):
+    def __init__(self, random_forest, one_hot_encoded_groups=None, ordinal_attributes=None, numerical_attributes=None):
         """
         Constructor.
 
@@ -252,7 +252,7 @@ class DRAFT:
                         list of lists, where each sub-list contains the ID of an ordinal attribute
                         (i.e., an attribute taking values within a discrete set of ordered values),
                         followed by the lower and upper bounds of its domain.
-                        
+
         numerical_attributes: list, optional
                 list of lists, where each sub-list contains the ID of a numerical attribute
                 (i.e., an attribute taking values in a continuous domain),
@@ -266,13 +266,22 @@ class DRAFT:
         from sklearn.ensemble import RandomForestClassifier
         from copy import deepcopy
         if not isinstance(random_forest, RandomForestClassifier):
-            raise TypeError("Expected a RandomForestClassifier but provided random_forest is of type " + str(type(random_forest)))
+            try:
+                from DP_RF import DP_RF
+                if not isinstance(random_forest, DP_RF):
+                    raise TypeError("Expected a RandomForestClassifier or DP_RF but provided random_forest is of type " + str(type(random_forest)))
+                else:
+                    self.is_DP_RF = True
+            except ImportError:
+                raise TypeError("Expected a RandomForestClassifier but provided random_forest is of type " + str(type(random_forest)))
+        else:
+            self.is_DP_RF = False
         self.clf = random_forest
-        self.ohe_groups = one_hot_encoded_groups
-        self.ordinal_attrs = ordinal_attributes
-        self.numerical_attrs = deepcopy(numerical_attributes) # Since we will modify it to include split values
+        self.ohe_groups = deepcopy([] if one_hot_encoded_groups is None else one_hot_encoded_groups)
+        self.ordinal_attrs = deepcopy([] if ordinal_attributes is None else ordinal_attributes)
+        self.numerical_attrs = deepcopy([] if numerical_attributes is None else numerical_attributes) # Since we will modify it to include split values
 
-    def fit(self, bagging=None, method='cp-sat', timeout=60, verbosity=False, n_jobs=-1, seed=0):
+    def fit(self, *, timeout=60, verbosity=False, n_threads=-1, seed=0, bagging=None, method='cp-sat'):
         """
         Reconstructs a dataset compatible with the knowledge provided by random_forest.
         In other terms, fits the data to the given model.
@@ -285,17 +294,17 @@ class DRAFT:
 
         method: str in {'cp-sat', 'milp'}, optional (default 'cp-sat')
                         the type of formulation that will be used to perform the reconstruction
-                        Note that `cp-sat` requires the OR-Tools Python library 
+                        Note that `cp-sat` requires the OR-Tools Python library
                         and `milp` the GurobiPy one (see the Installation section of our README).
 
         timeout: int, optional (default 60)
-                        maximum cpu time (in seconds) to be used by the search
+                        maximum solver search time (in seconds; excludes model construction) to be used by the search
                         if the solver is not able to return a solution within the given time frame, it will be indicated in the returned dictionary
 
         verbosity: bool, optional (default False)
                         whether to print information about the search progress or not
 
-        n_jobs: int in {-1, positives}, optional (default -1)
+        n_threads: int in {-1, positives}, optional (default -1)
                         maximum number of threads to be used by the solver to parallelize search
                         if -1, use all available threads
 
@@ -306,58 +315,49 @@ class DRAFT:
         Returns
         -------
         output: dictionary containing:
-            -> 'max_max_depth': maximum depth found when parsing the trees within the forest. 
-            -> 'status': the solve status returned by the solver. 
+            -> 'max_max_depth': maximum depth found when parsing the trees within the forest.
+            -> 'status': the solve status returned by the solver.
                 - When method=`cp-sat` (OR-Tools solver), it can be 'UNKNOWN', 'MODEL_INVALID', 'FEASIBLE', 'INFEASIBLE', or 'OPTIMAL'.
                 - When method=`milp` (Gurobi solver), it can be "LOADED", "OPTIMAL", "INFEASIBLE", "INF_OR_UNBD", "UNBOUNDED", "CUTOFF", "ITERATION_LIMIT", "NODE_LIMIT", "TIME_LIMIT", "SOLUTION_LIMIT", "INTERRUPTED", "NUMERIC", "SUBOPTIMAL", "INPROGRESS", "USER_OBJ_LIMIT", or "WORK_LIMIT".
             -> 'duration': duration
             -> 'reconstructed_data': array of shape = [n_samples, n_attributes] encoding the reconstructed dataset.
             Note that if the status is not OPTIMAL or FEASIBLE the reconstruction should not be used.
         """
+        from _validation import validate_solver_options
+        validate_solver_options(timeout, n_threads, seed)
+        self.numerical_attrs = [attr[:3] for attr in self.numerical_attrs]
+        self.result_dict = {}
         if not method in ['cp-sat', 'milp']:
             raise ValueError("Supported methods are either 'cp-sat' or 'milp', got: " + method)
-        
+
         try: # try to retrieve parameters from the sklearn object
             if bagging is None:
-                bagging = self.clf.bootstrap
+                if self.is_DP_RF:
+                    bagging = False
+                else:
+                    bagging = self.clf.bootstrap
         except:
             import warnings
             if bagging is None:
                 bagging = True
             warnings.warn("Couln't retrieve the parameter bootstrap from the given RF. Defaulting to True, but might result in suboptimal results if actual value is False.")
-            
+
         if method == 'cp-sat':
 
-            # Whether to use the alternative formulation (described in alt_cp_model_bag.tex)
-            use_alt = 0
-
-            # Whether to use the new maximum likelihood objective
-            # (the old one minimizes the absolute difference to the cumulative distribution of
-            # probability that a sample is used at least b times, for every tree)
-            use_mleobj = 1
-
-            # Cannot use MLE objective with alternative formulation
-            assert( use_mleobj + use_alt <= 1 )
-
-            # Whether to use constraints that are not necessarily valid, but valid with high probability (measured by epsilon specified within that function)
-            useprobctr = 0
-
-            if n_jobs == -1:
-                n_jobs = 0 # value for OR-Tools
+            if n_threads == -1:
+                n_threads = 0 # value for OR-Tools
             if not bagging:
-                self.perform_reconstruction_v1_CP_SAT(n_threads=n_jobs, time_out=timeout, verbosity=verbosity, seed=seed)
+                self._reconstruct_without_bagging(n_threads=n_threads, time_out=timeout, verbosity=verbosity, seed=seed)
             else:
-                if use_alt:
-                    self.perform_reconstruction_v2_CP_SAT_alt(n_threads=n_jobs, time_out=timeout, verbosity=verbosity, seed=seed, useprobctr=useprobctr)
-                else:
-                    self.perform_reconstruction_v2_CP_SAT(n_threads=n_jobs, time_out=timeout, verbosity=verbosity, seed=seed, use_mleobj=use_mleobj, useprobctr=useprobctr )
+                self._reconstruct_with_bagging(n_threads=n_threads, time_out=timeout,
+                    verbosity=verbosity, seed=seed)
 
         elif not bagging and method == 'milp':
             if len(self.ordinal_attrs) > 0 or len(self.numerical_attrs) > 0:
                 raise AttributeError("Currently numerical and ordinal attributes are not supported with MILP formulations.")
-            if n_jobs == -1:
-                n_jobs = 0 # value for Gurobi
-            self.perform_reconstruction_v1_MILP(n_threads=n_jobs, time_out=timeout, verbosity=int(verbosity), seed=seed)
+            if n_threads == -1:
+                n_threads = 0 # value for Gurobi
+            self._reconstruct_milp(n_threads=n_threads, time_out=timeout, verbosity=int(verbosity), seed=seed)
         else:
             raise AttributeError("Currently bagging is not supported with MILP formulations.")
 
@@ -366,7 +366,7 @@ class DRAFT:
         else:
             raise RuntimeError('Something went wrong and the reconstruction could not be performed. Please report this issue to the developers.')
 
-    def perform_reconstruction_v1_CP_SAT(self, n_threads=0, time_out=60, verbosity=1, seed=0):
+    def _reconstruct_without_bagging(self, n_threads=0, time_out=60, verbosity=1, seed=0):
         """
         Constructs and solves the CP based dataset reconstruction model (without the use of bagging to train the target random forest) using the OR-Tools CP-SAT solver.
 
@@ -377,7 +377,7 @@ class DRAFT:
                         if 0, use all available threads
 
         time_out: int, optional (default 60)
-                        maximum cpu time (in seconds) to be used by the search
+                        maximum solver search time (in seconds; excludes model construction) to be used by the search
                         if the solver is not able to return a solution within the given time frame, it will be indicated in the returned dictionary
 
         verbosity: int, optional (default 1)
@@ -390,7 +390,7 @@ class DRAFT:
         Returns
         -------
         output: dictionary containing:
-            -> 'max_max_depth': maximum depth found when parsing the trees within the forest. 
+            -> 'max_max_depth': maximum depth found when parsing the trees within the forest.
             -> 'status': the solve status returned by the solver. It can be 'UNKNOWN', 'MODEL_INVALID', 'FEASIBLE', 'INFEASIBLE', or 'OPTIMAL'.
             -> 'duration': duration
             -> 'reconstructed_data': array of shape = [n_samples, n_attributes] encoding the reconstructed dataset.
@@ -406,8 +406,7 @@ class DRAFT:
         start = time.time()
 
 
-        T, M, N, C, Z, max_max_depth, trees_branches, _ = self.parse_forest(clf, verbosity=verbosity)
-
+        T, M, N, C, Z, max_max_depth, trees_branches, _ = self._parse_forest(clf, verbosity=verbosity)
         ### Create the CP model
 
         ## Variables
@@ -508,7 +507,7 @@ class DRAFT:
             if status == cp_model.INFEASIBLE or status == cp_model.MODEL_INVALID:
                 raise RuntimeError('Infeasible model: the reconstruction problem has no solution. Please make sure the provided one-hot encoding constraints are correct. Else, report this issue to the developers.')
             else:
-                x_sol = np.random.randint(2,size = (N,M)) # Note that this is just to avoid raising an error but if the status is not OPTIMAL or FEASIBLE the reconstruction should not be used
+                x_sol = None
 
         solve_status = {0: 'UNKNOWN',
         1: 'MODEL_INVALID',
@@ -518,7 +517,7 @@ class DRAFT:
 
         self.result_dict = {'max_max_depth':max_max_depth, 'status':solve_status, 'duration': duration, 'reconstructed_data':x_sol}
 
-    def perform_reconstruction_v1_MILP(self, n_threads=0, time_out=60, verbosity=1, seed=0):
+    def _reconstruct_milp(self, n_threads=0, time_out=60, verbosity=1, seed=0):
         """
         Constructs and solves the MILP based dataset reconstruction model (without the use of bagging to train the target random forest) using the Gurobi MILP solver through its Python wrapper.
 
@@ -529,7 +528,7 @@ class DRAFT:
                         if -1, use all available threads
 
         time_out: int, optional (default 60)
-                        maximum cpu time (in seconds) to be used by the search
+                        maximum solver search time (in seconds; excludes model construction) to be used by the search
                         if the solver is not able to return a solution within the given time frame, it will be indicated in the returned dictionary
 
         verbosity: int, optional (default 1)
@@ -542,7 +541,7 @@ class DRAFT:
         Returns
         -------
         output: dictionary containing:
-            -> 'max_max_depth': maximum depth found when parsing the trees within the forest. 
+            -> 'max_max_depth': maximum depth found when parsing the trees within the forest.
             -> 'status': the solve status returned by the solver. It can be "LOADED", "OPTIMAL", "INFEASIBLE", "INF_OR_UNBD", "UNBOUNDED", "CUTOFF", "ITERATION_LIMIT", "NODE_LIMIT", "TIME_LIMIT", "SOLUTION_LIMIT", "INTERRUPTED", "NUMERIC", "SUBOPTIMAL", "INPROGRESS", "USER_OBJ_LIMIT", or "WORK_LIMIT".
             -> 'duration': duration
             -> 'reconstructed_data': array of shape = [n_samples, n_attributes] encoding the reconstructed dataset.
@@ -552,7 +551,7 @@ class DRAFT:
         import numpy as np # useful
         from gurobipy import GRB, quicksum # solver
         import time # time measurements
-        import sklearn 
+        import sklearn
 
         clf = self.clf
         one_hot_encoded_groups = self.ohe_groups
@@ -653,7 +652,7 @@ class DRAFT:
             else:
                 total_examples = t.weighted_n_node_samples
                 nodes_value = deepcopy(t.value) # For all nodes in the tree, list of their value (relative support for both classes)
-                for i in range(len(nodes_value)):     # For each node           
+                for i in range(len(nodes_value)):     # For each node
                     #print(total_examples[i], nodes_value[i])
                     for j in range(len(nodes_value[i][0])):
                         nodes_value[i][0][j] = np.round(nodes_value[i][0][j] * total_examples[i], decimals=0)
@@ -773,13 +772,11 @@ class DRAFT:
             print("Solve status: ", solve_status)
 
         ##Récupération des solutions
-        x_sol = x.getAttr(GRB.Attr.X)
-
-        x_sol = x_sol.tolist()
+        x_sol = x.getAttr(GRB.Attr.X).tolist() if m.SolCount > 0 else None
 
         self.result_dict = {'max_max_depth':max_max_depth, 'status':solve_status, 'duration': duration, 'reconstructed_data':x_sol}
 
-    def perform_reconstruction_v2_CP_SAT(self, n_threads=0, time_out=60, verbosity=1, seed=0, use_mleobj=1, useprobctr = 0 ):
+    def _reconstruct_with_bagging(self, n_threads=0, time_out=60, verbosity=1, seed=0, use_mleobj=1, useprobctr = 0 ):
         """
         Constructs and solves the CP based dataset reconstruction model (with the use of bagging to train the target random forest) using the OR-Tools CP-SAT solver.
 
@@ -790,7 +787,7 @@ class DRAFT:
                         if 0, use all available threads
 
         time_out: int, optional (default 60)
-                        maximum cpu time (in seconds) to be used by the search
+                        maximum solver search time (in seconds; excludes model construction) to be used by the search
                         if the solver is not able to return a solution within the given time frame, it will be indicated in the returned dictionary
 
         verbosity: int, optional (default 1)
@@ -812,7 +809,7 @@ class DRAFT:
         Returns
         -------
         output: dictionary containing:
-            -> 'max_max_depth': maximum depth found when parsing the trees within the forest. 
+            -> 'max_max_depth': maximum depth found when parsing the trees within the forest.
             -> 'status': the solve status returned by the solver. It can be 'UNKNOWN', 'MODEL_INVALID', 'FEASIBLE', 'INFEASIBLE', or 'OPTIMAL'.
             -> 'duration': duration
             -> 'reconstructed_data': array of shape = [n_samples, n_attributes] encoding the reconstructed dataset.
@@ -825,13 +822,13 @@ class DRAFT:
 
         clf = self.clf
         one_hot_encoded_groups = self.ohe_groups
-      
+
         start = time.time()
 
         ### Create the CP model
 
         ## Parse the forest
-        _, M, N, C, _, max_max_depth, trees_branches, maxcards = self.parse_forest(clf, verbosity=verbosity)
+        _, M, N, C, _, max_max_depth, trees_branches, maxcards = self._parse_forest(clf, verbosity=verbosity)
 
         ## Try to retrieve #Occurences
         try: # try to retrieve parameters from the sklearn object
@@ -845,25 +842,26 @@ class DRAFT:
                 warnings.warn("Couln't retrieve the parameter estimators_samples_ from the given RF, will try to infer and optimize it. This is normal since your scikit-learn version is <= 1.3.2.")
             else:
                 warnings.warn("Couln't retrieve the parameter estimators_samples_ from the given RF, will try to infer and optimize it.")
-  
-        # maxbval is exclusive: occurrence counts range from 0 to maxbval-1.
+
+        # This is the maximum number of times a sample can appear in a tree (note it will go from 0 to maxbval-1)
         # We fix maxbval to ensure that P(actual #occs >= maxbval) < confidence
         maxbvalmaxvalue = 12
         confidence = 1e-5
 
-        maxbval = self.compute_max_b_val(N, maxbvalmaxvalue, confidence)
-        if true_occurences is not None:
-            # Known counts must remain representable, even in the rare tail.
-            true_counts = [np.unique(indices, return_counts=True) for indices in true_occurences]
-            max_occs = max(int(counts.max()) for _, counts in true_counts)
-            maxbval = max(maxbval, max_occs + 1)
+        maxbval = self._compute_max_b_val(N, maxbvalmaxvalue, confidence)
         # ------------------------------------------------------------------------
 
         # Defines the probabilities that an item will appear b times
-        # Evaluate the tail directly to avoid cancellation for large known counts.
-        P = [binom.sf(i - 1, N, 1 / N) for i in range(maxbval)]
-        Pexact = [self.proba(i, N) for i in range(maxbval)]
-        Pexact[-1] = P[-1]
+        P = []
+        Pexact = [0 for i in range(maxbval)]
+        for i in range(maxbval):
+            #P.append( 1 - self._proba_inf(i + 1, N) )
+            P.append(1 - self._proba_inf(i , N))
+        for i in range(maxbval):
+            if i < maxbval - 1:
+                Pexact[i] = P[i] - P[i+1]
+            else:
+                Pexact[i] = P[i]
 
         '''if verbosity:
             print("Probabilities of an item appearing at least b times:")
@@ -911,7 +909,7 @@ class DRAFT:
 
 
         # eta_vars[k][t]: Variables that count how many times sample k is used in tree t
-        eta_vars = [[ model.NewIntVar(0,maxbval - 1, 'eta_%d_%d'%(k,t)) for t in range(ntrees)] for k in range(N) ]
+        eta_vars = [[ model.NewIntVar(0,maxbval, 'eta_%d_%d'%(k,t)) for t in range(ntrees)] for k in range(N) ]
 
         # q_vars[k][t][b] Variables that represent if sample k appears b times in tree t (needed for objective function)
         q_vars = [[[model.NewBoolVar('q_%d_%d_%d' %( t, k, b )) for b in range(maxbval) ] for t in range(ntrees) ] for k in range(N) ]
@@ -927,13 +925,17 @@ class DRAFT:
         else: # Could retrieve #occurences, pre-fix them!
             all_indices = [k for k in range(N)]
             for t in range(ntrees):
-                occurences_t = true_counts[t]
+                max_occs = -1
+                list_indices_t = true_occurences[t]
+                occurences_t = np.unique(list_indices_t, return_counts=True)
                 assert(sum(occurences_t[1]) == N)
+                if max(occurences_t[1]) > max_occs:
+                    max_occs = max(occurences_t[1])
                 for occ_id, occ_nb in zip(occurences_t[0], occurences_t[1]):
                     model.Add(eta_vars[occ_id][t] == occ_nb)
                 for occ_id in np.setdiff1d(all_indices, occurences_t[0]):
                     model.Add(eta_vars[occ_id][t] == 0)
-                assert(max(occurences_t[1]) < maxbval)
+                assert(max_occs <= maxbval)
         if use_mleobj == 0:
             # obj_vars[t][b]: Variables that will capture the difference between sum_{k} q_{tkb}  - N * p_b, for fixed t and b
             obj_vars = [ [ model.NewIntVar(-N,N, 'obj_%d_%d' % (t,b) ) for b in range(maxbval) ] for t in range(ntrees) ]
@@ -1034,7 +1036,7 @@ class DRAFT:
                 for c in range(C):
                     model.Add(cp_model.LinearExpr.Sum(branch_vars_c[c]) == int(
                         a_branch[1][c]))  # enforces the branch per-class cardinality
-            
+
             for k in range(N):
                 model.Add(
                     cp_model.LinearExpr.Sum(etayvars[k]) == eta_vars[k][tid] )  # eta (Number of samples in a tree) is consistent with y
@@ -1064,13 +1066,13 @@ class DRAFT:
 
         if verbosity:
             print("Model creation done!")
-        
+
         # Résolution
         solver = cp_model.CpSolver()
 
         # Sets a time limit of XX seconds.
         solver.parameters.log_search_progress = verbosity
-        solver.parameters.max_time_in_seconds = time_out 
+        solver.parameters.max_time_in_seconds = time_out
         solver.parameters.num_workers = n_threads
         solver.parameters.random_seed = seed
 
@@ -1088,10 +1090,11 @@ class DRAFT:
                 raise RuntimeError(
                     'Infeasible model: the reconstruction problem has no solution. Please make sure the provided one-hot encoding constraints are correct. Else, report this issue to the developers.')
             else:
-                x_sol = np.random.randint(2, size=(N, M))
+                x_sol = None
+                obj_val = float("nan")
 
         # Retrieve actual numerical attributes' values from their assigned interval ID
-        for k in range(N):
+        for k in range(N if x_sol is not None else 0):
             for i in range(len(self.numerical_attrs)):
                 attr_id = self.numerical_attrs[i][0]
                 interval_id = x_sol[k][attr_id]
@@ -1100,7 +1103,7 @@ class DRAFT:
         if verbosity:
             print("*************************************************************")
             print("*************************************************************")
-            print("  Solver specific:  Objval = %d,  duration = %g " % (obj_val, duration))
+            print("  Solver specific:  Objval = %g,  duration = %g " % (obj_val, duration))
             print("*************************************************************")
             print("*************************************************************")
 
@@ -1112,910 +1115,3 @@ class DRAFT:
 
         self.result_dict = {'max_max_depth': max_max_depth, 'status': solve_status, 'duration': duration,
                             'reconstructed_data': x_sol}
-
-    def perform_benchmark_partial_examples(self, n_threads=0, time_out=60, verbosity=1, seed=0, X_known = [], y_known=[]):
-        """
-        Runs the complementary experiments on reconstruction with knowledge of part of the training set examples, mentionned in the Appendix D of our paper.
-        The model builds upon the CP based dataset reconstruction model (with the use of bagging to train the target random forest) using the OR-Tools CP-SAT solver,
-        but pre-fixes a number of (supposedly known) training set examples.
-
-        Arguments
-        ---------
-        n_threads: int >= 0, optional (default 0)
-                        maximum number of threads to be used by the solver to parallelize search
-                        if 0, use all available threads
-
-        time_out: int, optional (default 60)
-                        maximum cpu time (in seconds) to be used by the search
-                        if the solver is not able to return a solution within the given time frame, it will be indicated in the returned dictionary
-
-        verbosity: int, optional (default 1)
-                        whether to print information (1) about the search progress or not (0)
-
-        seed: int, optional (default 0)
-                       random number generator seed
-                       used to fix the behaviour of the solvers
-
-        X_known: array-like, shape = [n_known, n_features] (default [])
-                        the set of known examples 
-                        with n_known <= N (there can not be more known than actual examples)
-                        and n_features == M (for the known examples we know all of their features)
-
-        y_known: array-like, shape = [n_known] (default [])
-                        the labels of the known examples 
-                        with n_known <= N (there can not be more known than actual examples)
-        
-        Returns
-        -------
-        output: dictionary containing:
-            -> 'max_max_depth': maximum depth found when parsing the trees within the forest. 
-            -> 'status': the solve status returned by the solver. It can be 'UNKNOWN', 'MODEL_INVALID', 'FEASIBLE', 'INFEASIBLE', or 'OPTIMAL'.
-            -> 'duration': duration
-            -> 'reconstructed_data': array of shape = [n_samples, n_attributes] encoding the reconstructed dataset.
-        """
-        import ortools
-        from ortools.sat.python import cp_model
-        import numpy as np  # useful
-        import time  # time measurements
-
-        clf = self.clf
-        one_hot_encoded_groups = self.ohe_groups
-
-        start = time.time()
-
-        ### Create the CP model
-
-        ## Parse the forest
-        T, M, N, C, Z, max_max_depth, trees_branches, maxcards = self.parse_forest(clf, verbosity=verbosity)
-
-        # This is the maximum number of times a sample can appear in a tree (note it will go from 0 to maxbval-1)
-        # We fix maxbval to ensure that P(actual #occs >= maxbval) < confidence
-        maxbvalmaxvalue = 12
-        confidence = 1e-5
-
-        maxbval = self.compute_max_b_val(N, maxbvalmaxvalue, confidence)  
-        # ------------------------------------------------------------------------
-
-        # Defines the probabilities that an item will appear b times
-        P = []
-        Pexact = [0 for i in range(maxbval)]
-        for i in range(maxbval):
-            #P.append( 1 - self.proba_inf(i + 1, N) )
-            P.append(1 - self.proba_inf(i , N))
-        for i in range(maxbval):
-            if i < maxbval - 1:
-                Pexact[i] = P[i] - P[i+1]
-            else:
-                Pexact[i] = P[i]
-
-
-
-        if verbosity:
-            print("Probabilities of an item appearing at least b times:")
-            print(P)
-            print(sum(P))
-
-            print("Probabilities of an item appearing at EXACTLY b times:")
-            print(Pexact)
-            print(sum(Pexact))
-
-        ntrees = len( trees_branches )
-
-        ## Variables
-        model = cp_model.CpModel()
-
-        # x[k][i] : Variables that represent what is sample k (each of its features i)
-        x_vars = [[model.NewBoolVar('x_%d_%d' % (k, i)) for i in range(M)] for k in range(N)]  # table of x_{ki}
-
-        # y_vars[k][c][t][v]: Variables that represent the number of times sample k is used as class c
-        #   in leaf/branch v of tree t
-        y_vars = [[[[] for t in range(ntrees)] for c in range(C)] for k in range(N)]
-
-        # w_vars[k][t][v]: Variables that represent if sample k is used in leaf v of tree t
-        w_vars = [[[] for t in range(ntrees) ] for k in range(N)]
-
-        # z_vars[k][c]: Variables that represent if sample k is assigned class c
-        z_vars = [[model.NewBoolVar('z_%d_%d'%(k,c)) for c in range(C) ] for k in range(N) ]
-
-        # Assume knowledge of dataset
-        assert(X_known.shape[0] == y_known.size)
-        assert(X_known.shape[0] <= N)
-        assert(X_known.shape[1] == M)
-
-        for k in range(X_known.shape[0]):
-            for w in range(len(one_hot_encoded_groups)):
-                onehotsum = 0
-                for i in one_hot_encoded_groups[w]:
-                    onehotsum += X_known[k][i]
-                if onehotsum != 1:
-                    print( " ERROR: SAMPLE " + str(k) + " has onehotencoding total " + str(onehotsum) + " for onehot: " + str(one_hot_encoded_groups[w]))
-                    exit(1)
-            for i in range(M):
-                model.Add( x_vars[k][i] == X_known[k][i] )
-            for c in range(C):
-                if y_known[k] == c:
-                    model.Add(z_vars[k][c] == 1)
-
-        if verbosity:
-            print("==> bench partial reconstr (examples): prefixed %d examples" %y_known.size)
-
-        classes, classes_counts = np.unique(y_known, return_counts=True)
-
-        fixedzidx = X_known.shape[0] # start pre-fixing after the pre-fixed examples
-        for c in range(C):
-            if c in classes:
-                class_count = classes_counts[c]
-            else:
-                class_count = 0
-            mincz = math.floor( maxcards[c] / maxbval) - class_count # subtract already set examples from this class
-            for offset in range(mincz):
-                model.Add( z_vars[fixedzidx+offset][c] == 1)
-            fixedzidx += mincz
-
-
-
-        # eta_vars[k][t]: Variables that count how many times sample k is used in tree t
-        eta_vars = [[ model.NewIntVar(0,maxbval - 1, 'eta_%d_%d'%(k,t)) for t in range(ntrees)] for k in range(N) ]
-
-        # q_vars[k][t][b] Variables that represent if sample k appears b times in tree t (needed for objective function
-        q_vars = [[[model.NewBoolVar('q_%d_%d_%d' %( t, k, b )) for b in range(maxbval) ] for t in range(ntrees) ] for k in range(N) ]
-
-        objfun = []
-        objfuncoeff = []
-        for t in range(ntrees):
-            for b in range(maxbval):
-                for k in range(N):
-                    objfuncoeff.append( int( 10 * math.log(Pexact[b]) ) )
-                    objfun.append( q_vars[k][t][b] )
-
-        model.Maximize( cp_model.LinearExpr.WeightedSum( objfun, objfuncoeff ) )
-
-        # Contraints
-        # one-hot encoding
-        for k in range(N):
-            for w in range(
-                    len(one_hot_encoded_groups)):  # for each group of binary attributes one-hot encoding the same attribute
-                model.Add(cp_model.LinearExpr.Sum([x_vars[k][i] for i in one_hot_encoded_groups[w]]) == 1)
-
-            # Enforces that every sample must be in at most one class
-            model.Add( cp_model.LinearExpr.Sum( z_vars[k] ) == 1)
-
-            for t in range(ntrees):
-                # Enforces relationship between counting variable eta and binary variables q
-                ortools_version = str(ortools.__version__).split(".")
-                if int(ortools_version[0]) <= 9 and int(ortools_version[1]) <= 8:
-                    model.AddMapDomain( eta_vars[k][t], q_vars[k][t], offset=0 )
-                else:
-                    model.add_map_domain( eta_vars[k][t], q_vars[k][t], offset=0 )
-
-
-
-        nleaves = []
-        for tid, all_branches_t in enumerate(trees_branches):  # for each tree
-
-            etayvars = [[] for k in
-                              range(N)]  # for each example we will ensure it is captured by exactly one branch
-
-            nleaves.append( len(all_branches_t) )
-            for a_branch_nb, a_branch in enumerate(all_branches_t):  # iterate over its branches
-
-                # Variables that will be involved in making sure number of samples in each leaf/branch is consistent
-                branch_vars_c = [[] for c in range(C)]
-
-                for k in range(N):
-                    w_vars[k][tid].append( model.NewBoolVar('w_%d_%d_%d'%(k,tid,a_branch_nb)) )
-
-                    # The loop right after is used to construct the constraints that if k is used in a given tree at a given leaf/branch
-                    # Then the x's must respect all the splits within the corresponding branch
-                    for a_split in a_branch[0]:
-                        feature_val = a_split[0]
-                        threshold_val = a_split[1]
-                        if feature_val > 0:
-                            model.Add( x_vars[k][abs(feature_val)-1] >= int( math.floor( threshold_val ) ) + 1 ).OnlyEnforceIf( w_vars[k][tid][a_branch_nb] )
-                        elif feature_val < 0:
-                            model.Add(x_vars[k][abs(feature_val) - 1] <= int( math.floor( threshold_val ) ) ).OnlyEnforceIf( w_vars[k][tid][a_branch_nb])
-                        else:
-                            raise ValueError("Feat 0 shouldn't be used here (1-indexed now)")
-
-                    for c in range(C):
-                        # Variable y represents how many times sample k is used in tree tid, node a_branch_nb,
-                        #    being that k is classified as class c
-                        y_vars[k][c][tid].append( model.NewIntVar(0, maxbval, 'y_%d_%d_%d_%d' % (tid, a_branch_nb, k, c)) )
-
-                        etayvars[k].append(y_vars[k][c][tid][a_branch_nb])
-
-                        branch_vars_c[c].append(y_vars[k][c][tid][a_branch_nb])
-
-
-                        # Constraints that enforce consistency between w and y variables
-                        model.Add( y_vars[k][c][tid][a_branch_nb] == 0 ).OnlyEnforceIf( w_vars[k][tid][a_branch_nb].Not() )
-
-                        # Constraints that enforce consistency between y and z variables
-                        model.Add( y_vars[k][c][tid][a_branch_nb] == 0 ).OnlyEnforceIf( z_vars[k][c].Not() )
-
-
-                for c in range(C):
-                    model.Add(cp_model.LinearExpr.Sum(branch_vars_c[c]) == int(
-                        a_branch[1][c]))  # enforces the branch per-class cardinality
-
-            for k in range(N):
-                model.Add(
-                    cp_model.LinearExpr.Sum(etayvars[k]) == eta_vars[k][tid] )  # eta (Number of samples in a tree) is consistent with y
-
-        if verbosity:
-            print("Model creation done!")
-
-        # Résolution
-        solver = cp_model.CpSolver()
-
-        # Sets a time limit of XX seconds.
-        solver.parameters.log_search_progress = verbosity
-        solver.parameters.max_time_in_seconds = time_out
-        solver.parameters.num_workers = n_threads
-        solver.parameters.random_seed = seed
-
-        status = solver.Solve(model)
-
-        end = time.time()
-        duration = end - start
-
-        # Récupération statut/valeurs
-        if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
-            x_sol = [[solver.Value(x_vars[k][i]) for i in range(M)] for k in range(N)]
-            obj_val = solver.ObjectiveValue()       
-        elif status == cp_model.INFEASIBLE or status == cp_model.MODEL_INVALID:
-            raise RuntimeError(
-                'Infeasible model: the reconstruction problem has no solution. Please make sure the provided one-hot encoding constraints are correct. Else, report this issue to the developers.')
-        else:
-            x_sol = np.random.randint(2, size=(N, M))
-
-        solve_status = {0: 'UNKNOWN',
-                        1: 'MODEL_INVALID',
-                        2: 'FEASIBLE',
-                        3: 'INFEASIBLE',
-                        4: 'OPTIMAL'}[status]
-
-        self.result_dict = {'max_max_depth': max_max_depth, 'status': solve_status, 'duration': duration,
-                            'reconstructed_data': x_sol}
-        
-        return self.result_dict
-
-    def perform_benchmark_partial_attributes(self, n_threads=0, time_out=60, verbosity=1, seed=0, X_known = [], known_attributes=[]):
-        """
-        Runs the complementary experiments on reconstruction with knowledge of part of the training set attributes, described in the Appendix D of our paper. 
-        The model builds upon the CP based dataset reconstruction model (with the use of bagging to train the target random forest) using the OR-Tools CP-SAT solver, 
-        but pre-fixes a number of (supposedly known) training set attributes (columns).
-
-        Arguments
-        ---------
-        n_threads: int >= 0, optional (default 0)
-                        maximum number of threads to be used by the solver to parallelize search
-                        if 0, use all available threads
-
-        time_out: int, optional (default 60)
-                        maximum cpu time (in seconds) to be used by the search
-                        if the solver is not able to return a solution within the given time frame, it will be indicated in the returned dictionary
-
-        verbosity: int, optional (default 1)
-                        whether to print information (1) about the search progress or not (0)
-
-        seed: int, optional (default 0)
-                       random number generator seed
-                       used to fix the behaviour of the solvers
-
-        X_known: array-like, shape = [n_known, n_features] (default [])
-                        The entire training set
-                        with n_known = N
-                        and n_features == M
-                        (note that in the current implementation we provide the entire training set
-                        although only the columns specified by known_attributes are known) 
-
-        known_attributes: array-like, shape = [n_features'] (default [])
-                        the features (id) that are known 
-                        (the associated entire colums provided through X_known will be fixed)
-                        with n_features' <= M (there can not be more known than actual features)
-        
-        Returns
-        -------
-        output: dictionary containing:
-            -> 'max_max_depth': maximum depth found when parsing the trees within the forest. 
-            -> 'status': the solve status returned by the solver. It can be 'UNKNOWN', 'MODEL_INVALID', 'FEASIBLE', 'INFEASIBLE', or 'OPTIMAL'.
-            -> 'duration': duration
-            -> 'reconstructed_data': array of shape = [n_samples, n_attributes] encoding the reconstructed dataset.
-        """
-        import ortools
-        from ortools.sat.python import cp_model
-        import numpy as np  # useful
-        import time  # time measurements
-
-        clf = self.clf
-        one_hot_encoded_groups = self.ohe_groups
-
-        start = time.time()
-
-        ### Create the CP model
-
-        ## Parse the forest
-        T, M, N, C, Z, max_max_depth, trees_branches, maxcards = self.parse_forest(clf, verbosity=verbosity)
-
-        # This is the maximum number of times a sample can appear in a tree (note it will go from 0 to maxbval-1)
-        # We fix maxbval to ensure that P(actual #occs >= maxbval) < confidence
-        maxbvalmaxvalue = 12
-        confidence = 1e-5
-
-        maxbval = self.compute_max_b_val(N, maxbvalmaxvalue, confidence)  
-        # ------------------------------------------------------------------------
-
-        # Defines the probabilities that an item will appear b times
-        P = []
-        Pexact = [0 for i in range(maxbval)]
-        for i in range(maxbval):
-            #P.append( 1 - self.proba_inf(i + 1, N) )
-            P.append(1 - self.proba_inf(i , N))
-        for i in range(maxbval):
-            if i < maxbval - 1:
-                Pexact[i] = P[i] - P[i+1]
-            else:
-                Pexact[i] = P[i]
-
-        if verbosity:
-            print("Probabilities of an item appearing at least b times:")
-            print(P)
-            print(sum(P))
-
-            print("Probabilities of an item appearing at EXACTLY b times:")
-            print(Pexact)
-            print(sum(Pexact))
-
-        ntrees = len( trees_branches )
-
-        ## Variables
-        model = cp_model.CpModel()
-
-        # x[k][i] : Variables that represent what is sample k (each of its features i)
-        x_vars = [[model.NewBoolVar('x_%d_%d' % (k, i)) for i in range(M)] for k in range(N)]  # table of x_{ki}
-
-        # y_vars[k][c][t][v]: Variables that represent the number of times sample k is used as class c
-        #   in leaf/branch v of tree t
-        y_vars = [[[[] for t in range(ntrees)] for c in range(C)] for k in range(N)]
-
-        # w_vars[k][t][v]: Variables that represent if sample k is used in leaf v of tree t
-        w_vars = [[[] for t in range(ntrees) ] for k in range(N)]
-
-        # z_vars[k][c]: Variables that represent if sample k is assigned class c
-        z_vars = [[model.NewBoolVar('z_%d_%d'%(k,c)) for c in range(C) ] for k in range(N) ]
-
-        # Assume knowledge of dataset
-        assert(X_known.shape[1] >= len(known_attributes))
-        assert(X_known.shape[1] == M) # not mandatory actually but that's what I do in the experiments
-        assert(X_known.shape[0] == N)
-
-        for i in known_attributes:
-            for k in range(N):
-                model.Add( x_vars[k][i] == X_known[k][i] )
-
-        if verbosity:
-            print("==> bench partial reconstr (attributes): prefixed %d attributes" %len(known_attributes))
-
-        # eta_vars[k][t]: Variables that count how many times sample k is used in tree t
-        eta_vars = [[ model.NewIntVar(0,maxbval - 1, 'eta_%d_%d'%(k,t)) for t in range(ntrees)] for k in range(N) ]
-
-        # q_vars[k][t][b] Variables that represent if sample k appears b times in tree t (needed for objective function
-        q_vars = [[[model.NewBoolVar('q_%d_%d_%d' %( t, k, b )) for b in range(maxbval) ] for t in range(ntrees) ] for k in range(N) ]
-
-        objfun = []
-        objfuncoeff = []
-        for t in range(ntrees):
-            for b in range(maxbval):
-                for k in range(N):
-                    objfuncoeff.append( int( 10 * math.log(Pexact[b]) ) )
-                    objfun.append( q_vars[k][t][b] )
-
-
-        model.Maximize( cp_model.LinearExpr.WeightedSum( objfun, objfuncoeff ) )
-
-
-        # Contraints
-        # one-hot encoding
-        for k in range(N):
-            for w in range(
-                    len(one_hot_encoded_groups)):  # for each group of binary attributes one-hot encoding the same attribute
-                model.Add(cp_model.LinearExpr.Sum([x_vars[k][i] for i in one_hot_encoded_groups[w]]) == 1)
-
-            # Enforces that every sample must be in at most one class
-            model.Add( cp_model.LinearExpr.Sum( z_vars[k] ) == 1)
-
-            for t in range(ntrees):
-                # Enforces relationship between counting variable eta and binary variables q
-                ortools_version = str(ortools.__version__).split(".")
-                if int(ortools_version[0]) <= 9 and int(ortools_version[1]) <= 8:
-                    model.AddMapDomain( eta_vars[k][t], q_vars[k][t], offset=0 )
-                else:
-                    model.add_map_domain( eta_vars[k][t], q_vars[k][t], offset=0 )
-
-
-
-        nleaves = []
-        for tid, all_branches_t in enumerate(trees_branches):  # for each tree
-
-            etayvars = [[] for k in
-                              range(N)]  # for each example we will ensure it is captured by exactly one branch
-
-            nleaves.append( len(all_branches_t) )
-            for a_branch_nb, a_branch in enumerate(all_branches_t):  # iterate over its branches
-
-                # Variables that will be involved in making sure number of samples in each leaf/branch is consistent
-                branch_vars_c = [[] for c in range(C)]
-
-                for k in range(N):
-                    w_vars[k][tid].append( model.NewBoolVar('w_%d_%d_%d'%(k,tid,a_branch_nb)) )
-
-                    # The loop right after is used to construct the constraints that if k is used in a given tree at a given leaf/branch
-                    # Then the x's must respect all the splits within the corresponding branch
-                    for a_split in a_branch[0]:
-                        feature_val = a_split[0]
-                        threshold_val = a_split[1]
-                        if feature_val > 0:
-                            model.Add( x_vars[k][abs(feature_val)-1] >= int( math.floor( threshold_val ) ) + 1 ).OnlyEnforceIf( w_vars[k][tid][a_branch_nb] )
-                        elif feature_val < 0:
-                            model.Add(x_vars[k][abs(feature_val) - 1] <= int( math.floor( threshold_val ) ) ).OnlyEnforceIf( w_vars[k][tid][a_branch_nb])
-                        else:
-                            raise ValueError("Feat 0 shouldn't be used here (1-indexed now)")
-
-                    for c in range(C):
-                        # Variable y represents how many times sample k is used in tree tid, node a_branch_nb,
-                        #    being that k is classified as class c
-                        y_vars[k][c][tid].append( model.NewIntVar(0, maxbval, 'y_%d_%d_%d_%d' % (tid, a_branch_nb, k, c)) )
-
-                        etayvars[k].append(y_vars[k][c][tid][a_branch_nb])
-
-                        branch_vars_c[c].append(y_vars[k][c][tid][a_branch_nb])
-
-
-                        # Constraints that enforce consistency between w and y variables
-                        model.Add( y_vars[k][c][tid][a_branch_nb] == 0 ).OnlyEnforceIf( w_vars[k][tid][a_branch_nb].Not() )
-
-                        # Constraints that enforce consistency between y and z variables
-                        model.Add( y_vars[k][c][tid][a_branch_nb] == 0 ).OnlyEnforceIf( z_vars[k][c].Not() )
-
-
-                for c in range(C):
-                    model.Add(cp_model.LinearExpr.Sum(branch_vars_c[c]) == int(
-                        a_branch[1][c]))  # enforces the branch per-class cardinality
-
-            for k in range(N):
-                model.Add(
-                    cp_model.LinearExpr.Sum(etayvars[k]) == eta_vars[k][tid] )  # eta (Number of samples in a tree) is consistent with y
-
-        if verbosity:
-            print("Model creation done!")
-
-        # Résolution
-        solver = cp_model.CpSolver()
-
-        # Sets a time limit of XX seconds.
-        solver.parameters.log_search_progress = verbosity
-        solver.parameters.max_time_in_seconds = time_out
-        solver.parameters.num_workers = n_threads
-        solver.parameters.random_seed = seed
-
-        status = solver.Solve(model)
-
-        end = time.time()
-        duration = end - start
-
-        # Récupération statut/valeurs
-        if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
-            x_sol = [[solver.Value(x_vars[k][i]) for i in range(M)] for k in range(N)]
-            obj_val = solver.ObjectiveValue()
-        elif status == cp_model.INFEASIBLE or status == cp_model.MODEL_INVALID:
-            raise RuntimeError(
-                'Infeasible model: the reconstruction problem has no solution. Please make sure the provided one-hot encoding constraints are correct. Else, report this issue to the developers.')
-        else:
-            x_sol = np.random.randint(2, size=(N, M))
-            obj_val = -1
-
-        solve_status = {0: 'UNKNOWN',
-                        1: 'MODEL_INVALID',
-                        2: 'FEASIBLE',
-                        3: 'INFEASIBLE',
-                        4: 'OPTIMAL'}[status]
-
-        self.result_dict = {'max_max_depth': max_max_depth, 'status': solve_status, 'duration': duration,
-                            'reconstructed_data': x_sol}
-        
-        return self.result_dict
-
-    # Function created to try and figure out what is the best performance that can be expected
-    # For this, we assume that one knows ALL samples in advance
-    # This will compute first the maximum likelihood solution (with bagging) assuming all data is given
-    # Then tries to see how much we can modify the data and still get something that conforms with all the parameters
-    def perform_reconstruction_benchmark(self, x_train, y_train, n_threads=0, time_out=60, verbosity=1, seed=0):
-        """
-        Runs the complementary experiments on the impact of bagging on data protection, mentionned in the Appendix B of our paper. 
-        The model builds upon the CP based dataset reconstruction model (with the use of bagging to train the target random forest) 
-        using the OR-Tools CP-SAT solver, but first pre-computes the optimal assignments of the examples' occurences within each
-        tree's training set (using the actual forest's training set) before computing how bad the reconstruction could be at worst 
-        given these correct occurences assignements.
-
-        Arguments
-        ---------
-        x_train: array-like, shape = [n_known, n_features] (default [])
-                        the actual training set of the forest 
-                        (used only to compute the optimal #occurences of the examples within the trees' training sets)
-                        with n_known = N
-                        and n_features = M
-
-        y_train: array-like, shape = [n_known] (default [])
-                        the labels of the training set examples 
-                        with n_known = N
-
-        n_threads: int >= 0, optional (default 0)
-                        maximum number of threads to be used by the solver to parallelize search
-                        if 0, use all available threads
-
-        time_out: int, optional (default 60)
-                        maximum cpu time (in seconds) to be used by the search
-                        if the solver is not able to return a solution within the given time frame, it will be indicated in the returned dictionary
-
-        verbosity: int, optional (default 1)
-                        whether to print information (1) about the search progress or not (0)
-
-        seed: int, optional (default 0)
-                       random number generator seed
-                       used to fix the behaviour of the solvers
-
-        Returns
-        -------
-        output: dictionary containing:
-            -> 'max_max_depth': maximum depth found when parsing the trees within the forest. 
-            -> 'status': the solve status returned by the solver. It can be 'UNKNOWN', 'MODEL_INVALID', 'FEASIBLE', 'INFEASIBLE', or 'OPTIMAL'.
-            -> 'duration': duration
-            -> 'reconstructed_data': array of shape = [n_samples, n_attributes] encoding the reconstructed dataset.
-        """
-        import ortools
-        from ortools.sat.python import cp_model
-        import numpy as np  # useful
-        import time  # time measurements
-
-        clf = self.clf
-        one_hot_encoded_groups = self.ohe_groups
-
-        start = time.time()
-
-        ### Create the CP model
-
-        ## Parse the forest
-        T, M, N, C, Z, max_max_depth, trees_branches, maxcards = self.parse_forest(clf, verbosity=verbosity)
-
-        # This is the maximum number of times a sample can appear in a tree (note it will go from 0 to maxbval-1)
-        # We fix maxbval to ensure that P(actual #occs >= maxbval) < confidence
-        maxbvalmaxvalue = 12
-        confidence = 1e-5
-
-        maxbval = self.compute_max_b_val(N, maxbvalmaxvalue, confidence)  
-        # ------------------------------------------------------------------------
-
-        # Defines the probabilities that an item will appear b times
-        P = []
-        Pexact = [0 for i in range(maxbval)]
-        for i in range(maxbval):
-            #P.append( 1 - self.proba_inf(i + 1, N) )
-            P.append(1 - self.proba_inf(i , N))
-        for i in range(maxbval):
-            if i < maxbval - 1:
-                Pexact[i] = P[i] - P[i+1]
-            else:
-                Pexact[i] = P[i]
-
-
-
-        if verbosity:
-            print("Probabilities of an item appearing at least b times:")
-            print(P)
-            print(sum(P))
-
-            print("Probabilities of an item appearing at EXACTLY b times:")
-            print(Pexact)
-            print(sum(Pexact))
-
-        ntrees = len( trees_branches )
-
-        ## Variables
-        model = cp_model.CpModel()
-
-        # x[k][i] : Variables that represent what is sample k (each of its features i)
-        x_vars = [[model.NewBoolVar('x_%d_%d' % (k, i)) for i in range(M)] for k in range(N)]  # table of x_{ki}
-
-        # y_vars[k][c][t][v]: Variables that represent the number of times sample k is used as class c
-        #   in leaf/branch v of tree t
-        y_vars = [[[[] for t in range(ntrees)] for c in range(C)] for k in range(N)]
-
-        # w_vars[k][t][v]: Variables that represent if sample k is used in leaf v of tree t
-        w_vars = [[[] for t in range(ntrees) ] for k in range(N)]
-
-        # z_vars[k][c]: Variables that represent if sample k is assigned class c
-        z_vars = [[model.NewBoolVar('z_%d_%d'%(k,c)) for c in range(C) ] for k in range(N) ]
-
-        # eta_vars[k][t]: Variables that count how many times sample k is used in tree t
-        eta_vars = [[ model.NewIntVar(0,maxbval - 1, 'eta_%d_%d'%(k,t)) for t in range(ntrees)] for k in range(N) ]
-
-        # q_vars[k][t][b] Variables that represent if sample k appears b times in tree t (needed for objective function
-        q_vars = [[[model.NewBoolVar('q_%d_%d_%d' %( t, k, b )) for b in range(maxbval) ] for t in range(ntrees) ] for k in range(N) ]
-
-
-        objfun = []
-        objfuncoeff = []
-        for t in range(ntrees):
-            for b in range(maxbval):
-                for k in range(N):
-                    objfuncoeff.append( int( 10 * math.log(Pexact[b]) ) )
-                    objfun.append( q_vars[k][t][b] )
-
-
-        model.Maximize( cp_model.LinearExpr.WeightedSum( objfun, objfuncoeff ) )
-
-
-        # Contraints
-        # one-hot encoding
-        for k in range(N):
-            for w in range(
-                    len(one_hot_encoded_groups)):  # for each group of binary attributes one-hot encoding the same attribute
-                model.Add(cp_model.LinearExpr.Sum([x_vars[k][i] for i in one_hot_encoded_groups[w]]) == 1)
-
-            # Enforces that every sample must be in at most one class
-            model.Add( cp_model.LinearExpr.Sum( z_vars[k] ) == 1)
-
-            for t in range(ntrees):
-                # Enforces relationship between counting variable eta and binary variables q
-                ortools_version = str(ortools.__version__).split(".")
-                if int(ortools_version[0]) <= 9 and int(ortools_version[1]) <= 8:
-                    model.AddMapDomain( eta_vars[k][t], q_vars[k][t], offset=0 )
-                else:
-                    model.add_map_domain( eta_vars[k][t], q_vars[k][t], offset=0 )
-
-
-
-        nleaves = []
-
-        # This stores the information of which variables are set to 1 and 0 in each branch
-        branch_info = [[] for t in range(len(trees_branches))]
-
-        for tid, all_branches_t in enumerate(trees_branches):  # for each tree
-
-            etayvars = [[] for k in
-                              range(N)]  # for each example we will ensure it is captured by exactly one branch
-
-            nleaves.append( len(all_branches_t) )
-            for a_branch_nb, a_branch in enumerate(all_branches_t):  # iterate over its branches
-
-                binfo = []
-                for a_split in a_branch[0]:
-                    if a_split > 0:
-                        binfo.append([abs(a_split) - 1, 1])
-                    elif a_split < 0:
-                        binfo.append([abs(a_split) - 1, 0])
-                    else:
-                        raise ValueError("Feat 0 shouldn't be used here (1-indexed now)")
-                branch_info[tid].append(binfo)
-
-
-                # Variables that will be involved in making sure number of samples in each leaf/branch is consistent
-                branch_vars_c = [[] for c in range(C)]
-
-                for k in range(N):
-                    w_vars[k][tid].append( model.NewBoolVar('w_%d_%d_%d'%(k,tid,a_branch_nb)) )
-
-                    # The loop right after is used to construct the constraints that if k is used in a given tree at a given leaf/branch
-                    # Then the x's must respect all the splits within the corresponding branch
-                    for a_split in a_branch[0]:
-                        feature_val = a_split[0]
-                        threshold_val = a_split[1]
-                        if feature_val > 0:
-                            model.Add( x_vars[k][abs(feature_val)-1] >= int( math.floor( threshold_val ) ) + 1 ).OnlyEnforceIf( w_vars[k][tid][a_branch_nb] )
-                        elif feature_val < 0:
-                            model.Add(x_vars[k][abs(feature_val) - 1] <= int( math.floor( threshold_val ) ) ).OnlyEnforceIf( w_vars[k][tid][a_branch_nb])
-                        else:
-                            raise ValueError("Feat 0 shouldn't be used here (1-indexed now)")
-
-                    for c in range(C):
-                        # Variable y represents how many times sample k is used in tree tid, node a_branch_nb,
-                        #    being that k is classified as class c
-                        y_vars[k][c][tid].append( model.NewIntVar(0, maxbval, 'y_%d_%d_%d_%d' % (tid, a_branch_nb, k, c)) )
-
-                        etayvars[k].append(y_vars[k][c][tid][a_branch_nb])
-
-                        branch_vars_c[c].append(y_vars[k][c][tid][a_branch_nb])
-
-
-                        # Constraints that enforce consistency between w and y variables
-                        model.Add( y_vars[k][c][tid][a_branch_nb] == 0 ).OnlyEnforceIf( w_vars[k][tid][a_branch_nb].Not() )
-
-                        # Constraints that enforce consistency between y and z variables
-                        model.Add( y_vars[k][c][tid][a_branch_nb] == 0 ).OnlyEnforceIf( z_vars[k][c].Not() )
-
-
-                for c in range(C):
-                    model.Add(cp_model.LinearExpr.Sum(branch_vars_c[c]) == int(
-                        a_branch[1][c]))  # enforces the branch per-class cardinality
-
-
-            for k in range(N):
-                model.Add(
-                    cp_model.LinearExpr.Sum(etayvars[k]) == eta_vars[k][tid] )  # eta (Number of samples in a tree) is consistent with y
-
-        # Assume knowledge of dataset
-        for k in range(N):
-            for w in range(len(one_hot_encoded_groups)):
-                onehotsum = 0
-                for i in one_hot_encoded_groups[w]:
-                    onehotsum += x_train[k][i]
-                if onehotsum != 1:
-                    print( " ERROR: SAMPLE " + str(k) + " has onehotencoding total " + str(onehotsum) + " for onehot: " + str(one_hot_encoded_groups[w]))
-                    exit(1)
-            for i in range(M):
-                model.Add( x_vars[k][i] == x_train[k][i] )
-            for c in range(C):
-                if y_train[k] == c:
-                    model.Add(z_vars[k][c] == 1)
-
-
-
-
-        if verbosity:
-            print("Model creation done!")
-
-#        for t in range(ntrees):
-#            print(" TREE INFO for tree %d" % t)
-#            for v in range( len( branch_info[t] ) ):
-#                print("   LEAF %d"%v)
-#                print(branch_info[t][v])
-
-        # Résolution
-        solver = cp_model.CpSolver()
-
-        # Sets a time limit of XX seconds.
-        solver.parameters.log_search_progress = verbosity
-        solver.parameters.max_time_in_seconds = time_out
-        solver.parameters.num_workers = n_threads
-        solver.parameters.random_seed = seed
-
-        status = solver.Solve(model)
-
-        end = time.time()
-        duration = end - start
-
-        print(" --- BENCHMARK RUN  ---  %g seconds" % (duration) )
-
-        # Récupération statut/valeurs
-        if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
-            # Start with solution value of -1, to say it has not been fixed yet
-            x_sol = [[-1 for i in range(M)] for k in range(N)]
-
-            obj_val = solver.ObjectiveValue()
-
-            y_sol = [[[[] for t in range(ntrees)] for c in range(C) ] for k in range(N) ]
-
-            # w_vars[k][t][v]: Variables that represent if sample k is used in leaf v of tree t
-            w_sol = [[[] for t in range(ntrees)] for k in range(N)]
-
-            # z_vars[k][c]: Variables that represent if sample k is assigned class c
-            z_sol = [[solver.Value(z_vars[k][c]) for c in range(C)] for k in range(N)]
-
-            # eta_vars[k][t]: Variables that count how many times sample k is used in tree t
-            eta_sol = [[solver.Value( eta_vars[k][t] ) for t in range(ntrees)] for k in range(N)]
-
-            # q_vars[k][t][b] Variables that represent if sample k appears b times in tree t (needed for objective function
-            q_sol = [[[ solver.Value( q_vars[k][t][b]) for b in range(maxbval)] for t in range(ntrees)] for k in range(N)]
-
-            count_samples = [ 0 for t in range(ntrees) ]
-            count_samples_fromy = [ 0 for t in range(ntrees) ]
-            count_bvals = [ [0 for b in range(maxbval)] for t in range(ntrees) ]
-
-            for k in range(N):
-                for t in range(ntrees):
-                    w_sol[k][t] = [ solver.Value(w_vars[k][t][v]) for v in range(len(w_vars[k][t])) ]
-                    for c in range(C):
-                        y_sol[k][c][t] = [ solver.Value(y_vars[k][c][t][v]) for v in range(len(y_vars[k][c][t]))  ]
-
-
-            for k in range(N):
-                if verbosity:
-                    print("SOL: SAMPLE %d  :  "%(k)  + str( x_sol[k] ) )
-                kc = -1
-                for c in range(C):
-                    if z_sol[k][c] == 1:
-                        # Check that class has not changed
-                        assert( kc == -1 )
-                        kc = c
-                        if verbosity:
-                            print("   - assigned class %d" %(c))
-
-                # Check that it has been assigned some class c
-                assert( kc != -1 )
-
-                for t in range(ntrees):
-                    if eta_sol[k][t] > 0:
-                        count_samples[t] += eta_sol[k][t]
-                        if verbosity:
-                            print("   - used %d times in tree %d"%(eta_sol[k][t],t))
-
-                    for b in range(maxbval):
-                        if int(eta_sol[k][t]) == b:
-                            assert( q_sol[k][t][b] == 1 )
-                            count_bvals[t][b] += 1
-                        else:
-                            assert( q_sol[k][t][b] == 0 )
-
-                    for v in range(len(y_sol[k][kc][t])):
-                        if y_sol[k][kc][t][v] > 0:
-                            assert( w_sol[k][t][v] > 0 )
-                            count_samples_fromy[t] += y_sol[k][kc][t][v]
-                            if verbosity:
-                                print("   -  at node %d: %d times"%(v,y_sol[k][kc][t][v]))
-
-                            assert( kc == y_train[k] )
-                            for f in range( len( branch_info[t][v] ) ):
-                                idx = branch_info[t][v][f][0]
-                                val = branch_info[t][v][f][1]
-                                if x_sol[k][idx] == -1:
-                                    x_sol[k][idx] = val
-                                else:
-                                    assert( x_sol[k][idx] == val )
-                print( " Solution %d (what is known) " % k)
-                print(x_sol[k])
-            ## Tree view
-            if verbosity:
-                print('------ Tree view -------')
-            for t in range(ntrees):
-                for v in range(nleaves[t]):
-                    if verbosity:
-                        print('  Samples at node %d of tree %d' % (v, t))
-                    for c in range(C):
-                        for k in range(N):
-                            if y_sol[k][c][t][v] > 0:
-                                if verbosity:
-                                    print("     Sample %d of class %d appears %d times" % (k, c, y_sol[k][c][t][v]))
-
-            if verbosity:
-                print( count_samples )
-                print( count_samples_fromy )
-            for t in range(ntrees):
-                if verbosity:
-                    print( "Distribution of samples for tree %d is:"%t + str( [ count_bvals[t][b] / N for b in range(maxbval) ]))
-                    print( " Expected (values of exact p) were:" + str(Pexact) )
-
-            fixedcoords = [ 0 for k in range(N) ]
-            for k in range(N):
-                for i in range(M):
-                    if x_sol[k][i] == -1:
-                        x_sol[k][i] = 1 - x_train[k][i]
-                    else:
-                        fixedcoords[k] += 1
-            print( " Total fixed coords: " + str( sum(fixedcoords) ) + "  out of " + str( N*M ) + " = (percent) " + str( sum(fixedcoords) / (N*M) ) )
-        else:
-            if status == cp_model.INFEASIBLE or status == cp_model.MODEL_INVALID:
-                raise RuntimeError(
-                    'Infeasible model: the reconstruction problem has no solution. Please make sure the provided one-hot encoding constraints are correct. Else, report this issue to the developers.')
-            else:
-                x_sol = np.random.randint(2, size=(N, M))
-
-        if verbosity:
-            print("*************************************************************")
-            print("*************************************************************")
-            print("  Solver specific:  Objval = %d,  duration = %g " % (obj_val, duration))
-            print("*************************************************************")
-            print("*************************************************************")
-
-        solve_status = {0: 'UNKNOWN',
-                        1: 'MODEL_INVALID',
-                        2: 'FEASIBLE',
-                        3: 'INFEASIBLE',
-                        4: 'OPTIMAL'}[status]
-
-        result_dict = {'max_max_depth': max_max_depth, 'status': solve_status, 'duration': duration,
-                            'reconstructed_data': x_sol}
-
-        return result_dict
-
-
