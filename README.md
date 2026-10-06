@@ -132,7 +132,7 @@ The prepared bundle was checked on Python 3.12 with NumPy 2.3.5, SciPy 1.17.0, p
 ## Papers
 
 - Julien Ferry, Ricardo Fukasawa, Timothée Pascal, and Thibaut Vidal. **Trained Random Forests Completely Reveal your Dataset.** ICML 2024. [Proceedings](https://proceedings.mlr.press/v235/ferry24a.html).
-- **Training Set Reconstruction from Differentially Private Forests: How Effective is DP?** SaTML 2026. [Preprint](https://arxiv.org/abs/2502.05307) · [Research code](https://github.com/vidalt/DRAFT-DP).
+- Alice Gorgé, Julien Ferry, Sébastien Gambs, and Thibaut Vidal. **Training Set Reconstruction from Differentially Private Forests: How Effective is DP?** SaTML 2026. [Preprint](https://arxiv.org/abs/2502.05307).
 
 Please cite the corresponding paper when using either method. The MIT license notices from both source repositories are retained in [LICENSE](LICENSE).
 
